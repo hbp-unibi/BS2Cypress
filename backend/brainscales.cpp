@@ -21,6 +21,7 @@
 //#include <boost/make_shared.hpp>
 #include <csignal>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <mutex>
 #include <string>
@@ -117,7 +118,6 @@ void cypress::BrainScaleS::set_stahl_params(
  */
 void cypress::BrainScaleS::init_logger()
 {
-	// 	// TODO loglevel
 	log4cxx::BasicConfigurator::resetConfiguration();
 	log4cxx::BasicConfigurator::configure();
 
@@ -138,12 +138,13 @@ void cypress::BrainScaleS::init_logger()
 	else if (level == LogSeverity::FATAL_ERROR) {
 		new_level = log4cxx::Level::getFatal();
 	}
+
 	auto logger = log4cxx::Logger::getRootLogger();
-	logger->setLevel(log4cxx::Level::getInfo());
+	logger->setLevel(new_level);
 	for (auto logger :
 	     {"ESS", "marocco", "calibtic", "stahl", "Default", "halbe"}) {
 		auto logger_inst = log4cxx::Logger::getLogger(logger);
-		logger_inst->setLevel(log4cxx::Level::getInfo());
+		logger_inst->setLevel(new_level);
 	}
 }
 
@@ -173,6 +174,9 @@ cypress::BrainScaleS::BrainScaleS(const Json &setup)
 	if (setup.count("digital_weight") > 0) {
 		m_digital_weight = setup["digital_weight"].get<bool>();
 	}
+	if (setup.count("ess") > 0) {
+		m_ess = setup["ess"].get<bool>();
+	}
 }
 
 std::vector<PopulationPtr> cypress::BrainScaleS::create_pops(
@@ -192,6 +196,12 @@ std::vector<PopulationPtr> cypress::BrainScaleS::create_pops(
 			bs_populations.push_back(::Population::create(
 			    store, populations[i].size(), CellType::IF_cond_exp));
 		}
+		else if (&populations[i].type() ==
+		         &cypress::EifCondExpIsfaIsta::inst()) {
+			bs_populations.push_back(
+			    ::Population::create(store, populations[i].size(),
+			                         CellType::EIF_cond_exp_isfa_ista));
+		}
 		else {
 			throw cypress::NotSupportedException(
 			    "Neuron Type not supported by BrainScaleS");
@@ -200,32 +210,51 @@ std::vector<PopulationPtr> cypress::BrainScaleS::create_pops(
 	return bs_populations;
 }
 
-void cypress::BrainScaleS::set_hom_param(
-    TypedCellParameterVector<CellType::IF_cond_exp> &vec,
-    const cypress::NeuronParameters &src)
+template <typename T>
+void cypress::BrainScaleS::set_hom_param(T &vec,
+                                         const cypress::NeuronParameters &src)
 {
 	auto &params = vec.parameters();
 	for (size_t neuron = 0; neuron < vec.size(); neuron++) {
-		set_ifce_params(params[neuron], src);
+		set_BS_params(params[neuron], src);
 	}
 }
 
-void cypress::BrainScaleS::set_inhom_param(
-    TypedCellParameterVector<CellType::IF_cond_exp> &vec,
-    const cypress::PopulationBase &pop)
+template <typename T>
+void cypress::BrainScaleS::set_inhom_param(T &vec,
+                                           const cypress::PopulationBase &pop)
 {
 	auto &params = vec.parameters();
 	for (size_t neuron = 0; neuron < vec.size(); neuron++) {
-		set_ifce_params(params[neuron], pop[neuron].parameters());
+		set_BS_params(params[neuron], pop[neuron].parameters());
 	}
 }
+
+template void cypress::BrainScaleS::set_hom_param<
+    TypedCellParameterVector<CellType::IF_cond_exp>>(
+    TypedCellParameterVector<CellType::IF_cond_exp> &vec,
+    const cypress::NeuronParameters &src);
+template void cypress::BrainScaleS::set_hom_param<
+    TypedCellParameterVector<CellType::EIF_cond_exp_isfa_ista>>(
+    TypedCellParameterVector<CellType::EIF_cond_exp_isfa_ista> &vec,
+    const cypress::NeuronParameters &src);
+
+template void cypress::BrainScaleS::set_inhom_param<
+    TypedCellParameterVector<CellType::IF_cond_exp>>(
+    TypedCellParameterVector<CellType::IF_cond_exp> &vec,
+    const cypress::PopulationBase &pop);
+
+template void cypress::BrainScaleS::set_inhom_param<
+    TypedCellParameterVector<CellType::EIF_cond_exp_isfa_ista>>(
+    TypedCellParameterVector<CellType::EIF_cond_exp_isfa_ista> &vec,
+    const cypress::PopulationBase &pop);
 
 void cypress::BrainScaleS::set_population_parameters(
     PopulationPtr &bs_pop, const cypress::PopulationBase &pop)
 {
-    if(bs_pop == nullptr){
-        return;
-    }
+	if (bs_pop == nullptr) {
+		return;
+	}
 	if (&(pop.type()) == &cypress::SpikeSourceArray::inst()) {
 		auto &params =
 		    reinterpret_cast<
@@ -238,20 +267,40 @@ void cypress::BrainScaleS::set_population_parameters(
 		return;
 	}
 
-	// If cond exp type
 	bool homogeneous = pop.homogeneous_parameters();
-	auto &params =
-	    reinterpret_cast<TypedCellParameterVector<CellType::IF_cond_exp> &>(
-	        bs_pop->parameters());
-	const auto &par_names = pop.type().parameter_names;
+	if (&(pop.type()) == &cypress::IfCondExp::inst()) {
+		auto &params =
+		    reinterpret_cast<TypedCellParameterVector<CellType::IF_cond_exp> &>(
+		        bs_pop->parameters());
+		const auto &par_names = pop.type().parameter_names;
 
-	for (size_t par = 0; par < par_names.size(); par++) {
-		if (homogeneous) {
-			set_hom_param(params, pop.parameters());
+		for (size_t par = 0; par < par_names.size(); par++) {
+			if (homogeneous) {
+				set_hom_param(params, pop.parameters());
+			}
+			else {
+				set_inhom_param(params, pop);
+			}
 		}
-		else {
-			set_inhom_param(params, pop);
+	}
+	else if (&(pop.type()) == &cypress::EifCondExpIsfaIsta::inst()) {
+		auto &params = reinterpret_cast<
+		    TypedCellParameterVector<CellType::EIF_cond_exp_isfa_ista> &>(
+		    bs_pop->parameters());
+		const auto &par_names = pop.type().parameter_names;
+
+		for (size_t par = 0; par < par_names.size(); par++) {
+			if (homogeneous) {
+				set_hom_param(params, pop.parameters());
+			}
+			else {
+				set_inhom_param(params, pop);
+			}
 		}
+	}
+	else {
+		throw cypress::NotSupportedException(
+		    "Neuron Type not supported by BrainScaleS");
 	}
 }
 
@@ -260,9 +309,9 @@ bool cypress::BrainScaleS::warn_gsyn_emitted = false;
 void cypress::BrainScaleS::set_population_records(
     PopulationPtr &bs_pop, const cypress::PopulationBase &pop)
 {
-    if(bs_pop == nullptr){
-        return;
-    }
+	if (bs_pop == nullptr) {
+		return;
+	}
 	const bool homogeneous_rec = pop.homogeneous_record();
 	if (&(pop.type()) == &cypress::SpikeSourceArray::inst()) {
 		auto &params =
@@ -292,9 +341,15 @@ void cypress::BrainScaleS::set_population_records(
 	}
 }
 
-boost::shared_ptr<Connector> cypress::BrainScaleS::get_connector(
+boost::shared_ptr<::Connector> cypress::BrainScaleS::get_connector(
     const cypress::ConnectionDescriptor &conn)
 {
+	if (conn.connector().synapse_name() != "StaticSynapse") {
+		throw cypress::ExecutionError(
+		    "Only static synapses are supported on "
+		    "this backend!");
+		// TODO dynamic synapses
+	}
 	std::string name = conn.connector().name();
 	auto &params = conn.connector().synapse()->parameters();
 	auto &connector = conn.connector();
@@ -321,34 +376,68 @@ boost::shared_ptr<Connector> cypress::BrainScaleS::get_connector(
 		    connector.additional_parameter(),
 		    connector.allow_self_connections(), params[0], params[1]);
 	}
+	return boost::shared_ptr<::Connector>();
+}
+
+std::tuple<boost::shared_ptr<::Connector>, boost::shared_ptr<::Connector>>
+cypress::BrainScaleS::get_list_connector(
+    const cypress::ConnectionDescriptor &conn,
+    std::vector<cypress::Connection> &conns_full)
+{
 	// List connector
-	if (conn.connector().synapse_name() != "StaticSynapse") {
-		throw cypress::ExecutionError(
-		    "Only static synapses are supported for the FromListConnector on "
-		    "this backend!");
-	}
-	std::vector<cypress::Connection> conns_full;
 	conn.connect(conns_full);
-	ConnectorTypes::vector_type weights(conns_full.size());
-	ConnectorTypes::vector_type delays(conns_full.size());
-	auto conns_temp = ::FromListConnector::Connections(conns_full.size());
+	size_t n_exhs = 0;
+	size_t n_inhs = 0;
 	for (size_t i = 0; i < conns_full.size(); i++) {
-		weights[i] = conns_full[i].n.SynapseParameters[0];
-		delays[i] = conns_full[i].n.SynapseParameters[1];
-		conns_temp[i] = {size_t(conns_full[i].n.src),
-		                 size_t(conns_full[i].n.tar)};
+		if (conns_full[i].excitatory()) {
+			n_exhs++;
+		}
+		else if (conns_full[i].inhibitory()) {
+			n_inhs++;
+		}
+		// default = 0 --> ignore!
+	}
+	ConnectorTypes::vector_type weights(n_exhs);
+	ConnectorTypes::vector_type delays(n_exhs);
+	auto conns_temp = ::FromListConnector::Connections(n_exhs);
+
+	ConnectorTypes::vector_type weights_inh(n_inhs);
+	ConnectorTypes::vector_type delays_inh(n_inhs);
+	auto conns_temp_inh = ::FromListConnector::Connections(n_inhs);
+
+	size_t counter_exh = 0, counter_inh = 0;
+
+	for (size_t i = 0; i < conns_full.size(); i++) {
+		if (conns_full[i].excitatory()) {
+			weights[counter_exh] = conns_full[i].n.SynapseParameters[0];
+			delays[counter_exh] = conns_full[i].n.SynapseParameters[1];
+			conns_temp[counter_exh] = {size_t(conns_full[i].n.src),
+			                           size_t(conns_full[i].n.tar)};
+			counter_exh++;
+		}
+		else if (conns_full[i].inhibitory()) {
+			weights_inh[counter_inh] = -conns_full[i].n.SynapseParameters[0];
+			delays_inh[counter_inh] = conns_full[i].n.SynapseParameters[1];
+			conns_temp_inh[counter_inh] = {size_t(conns_full[i].n.src),
+			                               size_t(conns_full[i].n.tar)};
+			counter_inh++;
+		}
 	};
-	return boost::make_shared<::FromListConnector>(std::move(conns_temp),
-	                                               weights, delays);
+
+	return std::make_tuple(
+	    boost::make_shared<::FromListConnector>(std::move(conns_temp), weights,
+	                                            delays),
+	    boost::make_shared<::FromListConnector>(std::move(conns_temp_inh),
+	                                            weights_inh, delays_inh));
 }
 
 ::PopulationView cypress::BrainScaleS::get_popview(PopulationPtr bs_pop,
                                                    const size_t &start,
                                                    const size_t &end)
 {
-    if(bs_pop == nullptr){
-        return ::PopulationView();
-    }
+	if (bs_pop == nullptr) {
+		return ::PopulationView();
+	}
 	if (start == 0 and end == bs_pop->size()) {
 		return bs_pop;
 	}
@@ -370,9 +459,9 @@ void cypress::BrainScaleS::manual_placement(
 			    "Hicann must be integer or array of integers!");
 		}
 		for (auto pop : bs_populations) {
-            if(pop == nullptr){
-                continue;
-            }
+			if (pop == nullptr) {
+				continue;
+			}
 			marocco->manual_placement.on_hicann(
 			    pop->id(), HMF::Coordinate::HICANNOnWafer(
 			                   HMF::Coordinate::Enum(hicann.get<int>())));
@@ -389,9 +478,9 @@ void cypress::BrainScaleS::manual_placement(
 			    HMF::Coordinate::Enum(i.get<int>())));
 		}
 		for (auto pop : bs_populations) {
-            if(pop == nullptr){
-                continue;
-            }
+			if (pop == nullptr) {
+				continue;
+			}
 			marocco->manual_placement.on_hicann(pop->id(), hicanns);
 		}
 	}
@@ -438,8 +527,7 @@ void cypress::BrainScaleS::fetch_data(
 						neuron.signals().data(idx.value(), std::move(data));
 					}
 				}
-				else {
-					// TODO Gsyn not recordable
+				else if (signals[j] == "v") {
 					auto idx =
 					    populations[i][0].type().signal_index(signals[j]);
 					for (size_t k = 0; k < bs_populations[i]->size(); k++) {
@@ -451,9 +539,9 @@ void cypress::BrainScaleS::fetch_data(
 						    std::make_shared<cypress::Matrix<cypress::Real>>(
 						        len, 2);
 						for (size_t l = 0; l < len; l++) {
+							(*data)(l, 0) =
+							    std::get<0>(voltageTrace[l]);  // time
 							(*data)(l, 1) =
-							    std::get<0>(voltageTrace[l]) * 1e3;  // time
-							(*data)(l, 2) =
 							    std::get<1>(voltageTrace[l]);  // mem
 						}
 						neuron.signals().data(idx.value(), std::move(data));
@@ -463,7 +551,93 @@ void cypress::BrainScaleS::fetch_data(
 		}
 	}
 }
+namespace {
+inline auto pop_to_bio_neurons(marocco::placement::results::Placement &results,
+                               PopulationPtr &source)
+{
+	std::vector<std::reference_wrapper<const marocco::BioNeuron>> ret;
+	for (auto &it : results.find(source->id())) {
+		ret.push_back(std::ref(it.bio_neuron()));
+	}
+	if (ret.size() != source->size()) {
+		throw cypress::ExecutionError(
+		    "Something wrong in setting low-level weights: resolving neurons "
+		    "to bio neurons");
+	}
+	std::sort(ret.begin(), ret.end(),
+	          [](const marocco::BioNeuron &a, const marocco::BioNeuron &b) {
+		          return a.neuron_index() < b.neuron_index();
+	          });
+	return ret;
+}
 
+inline auto get_synapse(size_t conn_id, const marocco::BioNeuron &bio_nrn_a,
+                        const marocco::BioNeuron &bio_nrn_b,
+                        marocco::routing::results::Synapses &results_synapses)
+{
+
+	std::vector<
+	    std::reference_wrapper<const marocco::routing::results::Synapses::
+	                               optional_hardware_synapse_type>>
+	    ret;
+	/*std::cout << "get_synapse" << std::endl;
+	std::cout << "Neuron : " << bio_nrn_a.neuron_index() << " population "
+	          << bio_nrn_a.population() << std::endl;
+	std::cout << "Neuron : " << bio_nrn_b.neuron_index() << " population "
+	          << bio_nrn_b.population() << std::endl;*/
+	for (auto &it : results_synapses.find(conn_id, bio_nrn_a, bio_nrn_b)) {
+		ret.push_back(std::ref(it.hardware_synapse()));
+	}
+	if (ret.size() > 1) {
+		throw cypress::ExecutionError(
+		    "Something went wrong in setting low-level weights: several "
+		    "hardware synapses!");
+	}
+	return ret;
+}
+
+void set_low_level_weights_list(
+    PopulationPtr &source, PopulationPtr &target, ProjectionPtr &conn_exc,
+    ProjectionPtr &conn_inh, std::vector<cypress::Connection> &vec,
+    boost::shared_ptr<pymarocco::runtime::Runtime> runtime)
+{
+	auto &results = runtime->results()->placement;
+	auto bio_nrns_a = pop_to_bio_neurons(results, source);
+	auto bio_nrns_b = pop_to_bio_neurons(results, target);
+	auto &results_synapses = runtime->results()->synapse_routing.synapses();
+
+	for (cypress::Connection &i : vec) {
+		if (i.n.SynapseParameters[0] == 0) {
+			continue;  // Weight==0 synapses are deleted
+		}
+		size_t conn_id;
+		uint8_t weight = 0;
+		if (i.n.excitatory()) {
+			conn_id = conn_exc->id();
+			weight = i.n.SynapseParameters[0];
+		}
+		else if (i.n.inhibitory()) {
+			conn_id = conn_inh->id();
+			weight = -i.n.SynapseParameters[0];
+		}
+		else {
+			continue;  // ignore null synapse
+		}
+
+		auto syn_hand = get_synapse(conn_id, bio_nrns_a[i.n.src],
+		                            bio_nrns_b[i.n.tar], results_synapses);
+		if (syn_hand.size() == 0) {
+			// No synapse found --> probably not mapped to hw/lost
+			cypress::global_logger().debug(
+			    "cypress",
+			    "Ignoring missing synapse in setting low-level weights");
+		}
+		auto hicann = syn_hand[0].get()->toHICANNOnWafer();
+		auto proxy = (*runtime->wafer())[hicann].synapses[*(syn_hand[0].get())];
+		proxy.weight = HMF::HICANN::SynapseWeight(weight);
+	}
+}
+}  // namespace
 void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
                                   Real duration) const
 {
@@ -525,23 +699,40 @@ void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
 	// Random generator used for random connectors
 	boost::shared_ptr<RandomGenerator> rng =
 	    boost::make_shared<NativeRandomGenerator>(1234);
+
 	std::vector<ProjectionPtr> projections;
+	std::vector<ProjectionPtr> list_projections_exc;
+	std::vector<ProjectionPtr> list_projections_inh;
+	std::vector<std::vector<cypress::Connection>> list_connections;
+
 	for (size_t i = 0; i < source.connections().size(); i++) {
 		auto conn = source.connections()[i];
 		auto source = get_popview(bs_populations[conn.pid_src()],
-		                          conn.nid_src1(), conn.nid_src1());
+		                          conn.nid_src0(), conn.nid_src1());
 		auto target = get_popview(bs_populations[conn.pid_tar()],
-		                          conn.nid_tar1(), conn.nid_tar1());
+		                          conn.nid_tar0(), conn.nid_tar1());
 		std::string recep_type = conn.connector().synapse()->parameters()[0] > 0
 		                             ? "excitatory"
 		                             : "inhibitory";
 
-		projections.emplace_back(::Projection::create(
-		    store, source, target, get_connector(conn), rng, "",
-		    recep_type));  //+ Synapse_dynamics , label
-
-		// TODO mixed from list connector?
-		// TODO dynamic synapse
+		// TODO dynamic synapses
+		auto connect = get_connector(conn);
+		if (connect) {
+			projections.emplace_back(
+			    ::Projection::create(store, source, target, connect, rng, "",
+			                         recep_type));  //+ Synapse_dynamics , label
+		}
+		else {
+			projections.emplace_back(ProjectionPtr());
+			list_connections.emplace_back();
+			auto tuple = get_list_connector(conn, list_connections.back());
+			list_projections_exc.emplace_back(
+			    ::Projection::create(store, source, target, std::get<0>(tuple),
+			                         rng, "", "excitatory"));
+			list_projections_inh.emplace_back(
+			    ::Projection::create(store, source, target, std::get<1>(tuple),
+			                         rng, "", "inhibitory"));
+		}
 	}
 
 	// ProjectionMatrix weights = proj->getWeights(); Used to get the set
@@ -556,31 +747,43 @@ void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
 	submit(store);
 	set_stahl_params(runtime->wafer(), 1023, 1);
 
-	marocco->backend = pymarocco::PyMarocco::Backend::Hardware;
+	if (m_ess) {
+		marocco->backend = pymarocco::PyMarocco::Backend::ESS;
+	}
+	else {
+		marocco->backend = pymarocco::PyMarocco::Backend::Hardware;
+	}
 	marocco->skip_mapping = true;
 
 	// Set low-level weights
 	if (m_digital_weight) {
-		global_logger().info(
-		    "cypress",
-		    "Setting low-level digital weights only supports the same weight "
-		    "for all connections in the projection");
+		size_t counter = 0;
 		for (size_t i = 0; i < projections.size(); i++) {
-			auto hw_synapses =
-			    runtime->results()->synapse_routing.synapses().find(
-			        projections[i]->id());
-			for (auto hw_syn : hw_synapses) {
-				auto syn_hand = hw_syn.hardware_synapse();
-				auto hicann = syn_hand->toHICANNOnWafer();
-				auto proxy = (*runtime->wafer())[hicann].synapses[*syn_hand];
-				proxy.weight =
-				    HMF::HICANN::SynapseWeight(source.connections()[i]
-				                                   .connector()
-				                                   .synapse()
-				                                   ->parameters()[0]);
+			auto conn = source.connections()[i];
+			if (!projections[i]) {
+				set_low_level_weights_list(bs_populations[conn.pid_src()],
+				                           bs_populations[conn.pid_tar()],
+				                           list_projections_exc[counter],
+				                           list_projections_inh[counter],
+				                           list_connections[counter], runtime);
+				counter++;
+			}
+			else {
+				auto hw_synapses =
+				    runtime->results()->synapse_routing.synapses().find(
+				        projections[i]->id());
+				for (auto hw_syn : hw_synapses) {
+					auto syn_hand = hw_syn.hardware_synapse();
+					auto hicann = syn_hand->toHICANNOnWafer();
+					auto proxy =
+					    (*runtime->wafer())[hicann].synapses[*syn_hand];
+					proxy.weight = HMF::HICANN::SynapseWeight(
+					    conn.connector().synapse()->parameters()[0]);
+				}
 			}
 		}
 	}
+
 	// Run the emulation
 	auto buildconn = std::chrono::system_clock::now();
 	store.run(duration);
@@ -604,4 +807,3 @@ cypress::BrainScaleS::supported_neuron_types() const
 	    &cypress::SpikeSourceArray::inst(), &cypress::IfCondExp::inst(),
 	    &cypress::EifCondExpIsfaIsta::inst()};
 }
-//}  // namespace cypress

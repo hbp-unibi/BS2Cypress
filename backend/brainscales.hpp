@@ -77,6 +77,7 @@ public:
 	 *    "wafer": 33, // which wafer to run on
 	 *    "hicann": [297], // hicanns used for the experiment
 	 *    "digital_weight" : true //directly set low-level digital weights
+	 *    "ess" : true // for simulation of the wafer
 	 * }
 	 */
 	BrainScaleS(const Json &setup = Json());
@@ -108,6 +109,7 @@ private:
 	Json m_hicann = 297;
 	bool m_digital_weight = false;
 	bool m_warn_gsyn_emitted = false;
+	bool m_ess = false;
 
 public:
 	// Static functions for setting up the network
@@ -131,7 +133,7 @@ public:
 	 * @param tar target BS parameter vector
 	 * @oaram src source cypress parameters
 	 */
-	static inline void set_ifce_params(
+	static inline void set_BS_params(
 	    CellTypeTraits<CellType::IF_cond_exp>::Parameters &tar,
 	    const NeuronParameters &src)
 	{
@@ -149,14 +151,40 @@ public:
 	}
 
 	/**
+	 * Sets parameters of src to bs parameters for the IF_cond_exp model.
+	 *
+	 * @param tar target BS parameter vector
+	 * @oaram src source cypress parameters
+	 */
+	static inline void set_BS_params(
+	    CellTypeTraits<CellType::EIF_cond_exp_isfa_ista>::Parameters &tar,
+	    const NeuronParameters &src)
+	{
+		tar.cm = src[0];
+		tar.tau_m = src[1];
+		tar.tau_syn_E = src[2];
+		tar.tau_syn_I = src[3];
+		tar.tau_refrac = src[4];
+		tar.tau_w = src[5];
+		tar.v_rest = src[6];
+		tar.v_thresh = src[7];
+		tar.v_reset = src[8];
+		tar.e_rev_E = src[9];
+		tar.e_rev_I = src[10];
+		tar.i_offset = src[11];
+		tar.a = src[12];
+		tar.b = src[13];
+		tar.delta_T = src[14];
+	}
+
+	/**
 	 * Setts the same parameter set for all populations
 	 *
 	 * @param vec target BS population parameter vector
 	 * @param src source cypress parameters
 	 */
-	static void set_hom_param(
-	    TypedCellParameterVector<CellType::IF_cond_exp> &vec,
-	    const NeuronParameters &src);
+	template <typename T>
+	static void set_hom_param(T &vec, const NeuronParameters &src);
 
 	/**
 	 * Setts different parameters for every neuron
@@ -164,9 +192,8 @@ public:
 	 * @param vec target BS population parameter vector
 	 * @param pop source cypress population
 	 */
-	static void set_inhom_param(
-	    TypedCellParameterVector<CellType::IF_cond_exp> &vec,
-	    const PopulationBase &pop);
+	template <typename T>
+	static void set_inhom_param(T &vec, const PopulationBase &pop);
 
 	/**
 	 * For every population, check its type and whether parameters are
@@ -177,7 +204,7 @@ public:
 	 */
 	static void set_population_parameters(PopulationPtr &bs_pop,
 	                                      const PopulationBase &pop);
-    
+
 	static bool warn_gsyn_emitted;
 
 	/**
@@ -302,14 +329,30 @@ public:
 	                                   const PopulationBase &pop);
 
 	/**
-	 * Create the appropriate BS connector related to the one in a cypress
+	 * Create the associated BS connector related to the one in a cypress
 	 * ConnectionDescriptor.
 	 *
 	 * @param conn cypress connection description to be converted
 	 * @return pointer to BS connector, directly used in Projection
 	 */
 	static boost::shared_ptr<::Connector> get_connector(
-	    const ConnectionDescriptor &conn);
+	    const cypress::ConnectionDescriptor &conn);
+
+	/**
+	 * Create the associated BS connector related to the one in a cypress
+	 * ConnectionDescriptor, specialization for ListConnections
+	 *
+	 * @param conn cypress connection description to be converted
+	 * @param conns_full list of cypress connection vector, in which which
+	 * connection details will be inserted
+	 *
+	 * @return tuple of pointers to BS connectors, <0> for excitatory and <1>
+	 * for inhibitory connections
+	 */
+	static std::tuple<boost::shared_ptr<::Connector>,
+	                  boost::shared_ptr<::Connector>>
+	get_list_connector(const cypress::ConnectionDescriptor &conn,
+	                   std::vector<cypress::Connection> &conns_full);
 
 	/**
 	 * Create a BS population view

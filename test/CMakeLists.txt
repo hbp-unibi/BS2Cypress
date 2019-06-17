@@ -45,6 +45,7 @@ target_link_libraries(test_brainscales PUBLIC
     PRIVATE log4cxx.so.10
     PRIVATE ${Boost_LIBRARIES}
     PRIVATE ${PYTHON_LIBRARIES}
+    dl
 	${GTEST_LIBRARIES}
 	pthread
 )
