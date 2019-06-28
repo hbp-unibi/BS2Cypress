@@ -79,7 +79,7 @@ namespace D = halco::hicann::v2;
  *
  * @param wafer pointer to wafer object
  * @param gmax set to 1023
- * @param gmax_div set to 1
+ * @param gmax_div set to 2
  */
 void cypress::BrainScaleS::set_stahl_params(
     boost::shared_ptr<::sthal::Wafer> wafer, double gmax, double gmax_div)
@@ -96,8 +96,8 @@ void cypress::BrainScaleS::set_stahl_params(
 
 		for (auto driver : C::iter_all<D::SynapseDriverOnHICANN>()) {
 			for (auto row : C::iter_all<C::RowOnSynapseDriver>()) {
-				(*wafer)[hicann].synapses[driver][row].set_gmax_div(C::left,
-				                                                    gmax_div);
+				(*wafer)[hicann].synapses[driver][row].set_gmax_div(
+				    HMF::HICANN::GmaxDiv(gmax_div));
 			}
 		}
 
@@ -745,7 +745,7 @@ void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
 	marocco->skip_mapping = false;
 	store.run(duration);  // ms
 	submit(store);
-	set_stahl_params(runtime->wafer(), 1023, 1);
+	set_stahl_params(runtime->wafer(), 1023, 2);
 
 	if (m_ess) {
 		marocco->backend = pymarocco::PyMarocco::Backend::ESS;
