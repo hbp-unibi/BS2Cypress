@@ -379,7 +379,7 @@ TEST(BrainScaleS, get_list_connector)
 
 	auto conn_desc =
 	    ConnectionDescriptor(0, 0, 16, 1, 0, 16, Connector::from_list(vec));
-	std::vector<cypress::Connection> conns;
+	std::vector<cypress::LocalConnection> conns;
 	auto conn = BrainScaleS::get_list_connector(conn_desc, conns);
 
 	auto weights = boost::get<boost::numeric::ublas::vector<float>>(

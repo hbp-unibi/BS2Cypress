@@ -352,7 +352,7 @@ public:
 	static std::tuple<boost::shared_ptr<::Connector>,
 	                  boost::shared_ptr<::Connector>>
 	get_list_connector(const cypress::ConnectionDescriptor &conn,
-	                   std::vector<cypress::Connection> &conns_full);
+	                   std::vector<cypress::LocalConnection> &conns_full);
 
 	/**
 	 * Create a BS population view

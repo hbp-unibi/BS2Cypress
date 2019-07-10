@@ -382,7 +382,7 @@ boost::shared_ptr<::Connector> cypress::BrainScaleS::get_connector(
 std::tuple<boost::shared_ptr<::Connector>, boost::shared_ptr<::Connector>>
 cypress::BrainScaleS::get_list_connector(
     const cypress::ConnectionDescriptor &conn,
-    std::vector<cypress::Connection> &conns_full)
+    std::vector<cypress::LocalConnection> &conns_full)
 {
 	// List connector
 	conn.connect(conns_full);
@@ -409,17 +409,17 @@ cypress::BrainScaleS::get_list_connector(
 
 	for (size_t i = 0; i < conns_full.size(); i++) {
 		if (conns_full[i].excitatory()) {
-			weights[counter_exh] = conns_full[i].n.SynapseParameters[0];
-			delays[counter_exh] = conns_full[i].n.SynapseParameters[1];
-			conns_temp[counter_exh] = {size_t(conns_full[i].n.src),
-			                           size_t(conns_full[i].n.tar)};
+			weights[counter_exh] = conns_full[i].SynapseParameters[0];
+			delays[counter_exh] = conns_full[i].SynapseParameters[1];
+			conns_temp[counter_exh] = {size_t(conns_full[i].src),
+			                           size_t(conns_full[i].tar)};
 			counter_exh++;
 		}
 		else if (conns_full[i].inhibitory()) {
-			weights_inh[counter_inh] = -conns_full[i].n.SynapseParameters[0];
-			delays_inh[counter_inh] = conns_full[i].n.SynapseParameters[1];
-			conns_temp_inh[counter_inh] = {size_t(conns_full[i].n.src),
-			                               size_t(conns_full[i].n.tar)};
+			weights_inh[counter_inh] = -conns_full[i].SynapseParameters[0];
+			delays_inh[counter_inh] = conns_full[i].SynapseParameters[1];
+			conns_temp_inh[counter_inh] = {size_t(conns_full[i].src),
+			                               size_t(conns_full[i].tar)};
 			counter_inh++;
 		}
 	};
@@ -598,7 +598,7 @@ inline auto get_synapse(size_t conn_id, const marocco::BioNeuron &bio_nrn_a,
 
 void set_low_level_weights_list(
     PopulationPtr &source, PopulationPtr &target, ProjectionPtr &conn_exc,
-    ProjectionPtr &conn_inh, std::vector<cypress::Connection> &vec,
+    ProjectionPtr &conn_inh, std::vector<cypress::LocalConnection> &vec,
     boost::shared_ptr<pymarocco::runtime::Runtime> runtime)
 {
 	auto &results = runtime->results()->placement;
@@ -606,26 +606,26 @@ void set_low_level_weights_list(
 	auto bio_nrns_b = pop_to_bio_neurons(results, target);
 	auto &results_synapses = runtime->results()->synapse_routing.synapses();
 
-	for (cypress::Connection &i : vec) {
-		if (i.n.SynapseParameters[0] == 0) {
+	for (cypress::LocalConnection &i : vec) {
+		if (i.SynapseParameters[0] == 0) {
 			continue;  // Weight==0 synapses are deleted
 		}
 		size_t conn_id;
 		uint8_t weight = 0;
-		if (i.n.excitatory()) {
+		if (i.excitatory()) {
 			conn_id = conn_exc->id();
-			weight = i.n.SynapseParameters[0];
+			weight = i.SynapseParameters[0];
 		}
-		else if (i.n.inhibitory()) {
+		else if (i.inhibitory()) {
 			conn_id = conn_inh->id();
-			weight = -i.n.SynapseParameters[0];
+			weight = -i.SynapseParameters[0];
 		}
 		else {
 			continue;  // ignore null synapse
 		}
 
-		auto syn_hand = get_synapse(conn_id, bio_nrns_a[i.n.src],
-		                            bio_nrns_b[i.n.tar], results_synapses);
+		auto syn_hand = get_synapse(conn_id, bio_nrns_a[i.src],
+		                            bio_nrns_b[i.tar], results_synapses);
 		if (syn_hand.size() == 0) {
 			// No synapse found --> probably not mapped to hw/lost
 			cypress::global_logger().debug(
@@ -703,7 +703,7 @@ void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
 	std::vector<ProjectionPtr> projections;
 	std::vector<ProjectionPtr> list_projections_exc;
 	std::vector<ProjectionPtr> list_projections_inh;
-	std::vector<std::vector<cypress::Connection>> list_connections;
+	std::vector<std::vector<cypress::LocalConnection>> list_connections;
 
 	for (size_t i = 0; i < source.connections().size(); i++) {
 		auto conn = source.connections()[i];
