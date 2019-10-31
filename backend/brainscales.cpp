@@ -179,28 +179,30 @@ cypress::BrainScaleS::BrainScaleS(const Json &setup)
 	}
 }
 
-std::vector<PopulationPtr> cypress::BrainScaleS::create_pops(
-    ObjectStore &store, const std::vector<cypress::PopulationBase> &populations)
+std::vector<euter::PopulationPtr> cypress::BrainScaleS::create_pops(
+    euter::ObjectStore &store,
+    const std::vector<cypress::PopulationBase> &populations)
 {
-	std::vector<PopulationPtr> bs_populations;
+	std::vector<euter::PopulationPtr> bs_populations;
 	for (size_t i = 0; i < populations.size(); i++) {
 		if (populations[i].size() == 0) {
 			bs_populations.push_back(nullptr);
 			continue;
 		}
 		if (&(populations[i].type()) == &cypress::SpikeSourceArray::inst()) {
-			bs_populations.push_back(::Population::create(
-			    store, populations[i].size(), CellType::SpikeSourceArray));
+			bs_populations.push_back(
+			    euter::Population::create(store, populations[i].size(),
+			                              euter::CellType::SpikeSourceArray));
 		}
 		else if (&populations[i].type() == &cypress::IfCondExp::inst()) {
-			bs_populations.push_back(::Population::create(
-			    store, populations[i].size(), CellType::IF_cond_exp));
+			bs_populations.push_back(euter::Population::create(
+			    store, populations[i].size(), euter::CellType::IF_cond_exp));
 		}
 		else if (&populations[i].type() ==
 		         &cypress::EifCondExpIsfaIsta::inst()) {
-			bs_populations.push_back(
-			    ::Population::create(store, populations[i].size(),
-			                         CellType::EIF_cond_exp_isfa_ista));
+			bs_populations.push_back(euter::Population::create(
+			    store, populations[i].size(),
+			    euter::CellType::EIF_cond_exp_isfa_ista));
 		}
 		else {
 			throw cypress::NotSupportedException(
@@ -231,36 +233,36 @@ void cypress::BrainScaleS::set_inhom_param(T &vec,
 }
 
 template void cypress::BrainScaleS::set_hom_param<
-    TypedCellParameterVector<CellType::IF_cond_exp>>(
-    TypedCellParameterVector<CellType::IF_cond_exp> &vec,
+    euter::TypedCellParameterVector<euter::CellType::IF_cond_exp>>(
+    euter::TypedCellParameterVector<euter::CellType::IF_cond_exp> &vec,
     const cypress::NeuronParameters &src);
 template void cypress::BrainScaleS::set_hom_param<
-    TypedCellParameterVector<CellType::EIF_cond_exp_isfa_ista>>(
-    TypedCellParameterVector<CellType::EIF_cond_exp_isfa_ista> &vec,
+    euter::TypedCellParameterVector<euter::CellType::EIF_cond_exp_isfa_ista>>(
+    euter::TypedCellParameterVector<euter::CellType::EIF_cond_exp_isfa_ista>
+        &vec,
     const cypress::NeuronParameters &src);
 
 template void cypress::BrainScaleS::set_inhom_param<
-    TypedCellParameterVector<CellType::IF_cond_exp>>(
-    TypedCellParameterVector<CellType::IF_cond_exp> &vec,
+    euter::TypedCellParameterVector<euter::CellType::IF_cond_exp>>(
+    euter::TypedCellParameterVector<euter::CellType::IF_cond_exp> &vec,
     const cypress::PopulationBase &pop);
 
 template void cypress::BrainScaleS::set_inhom_param<
-    TypedCellParameterVector<CellType::EIF_cond_exp_isfa_ista>>(
-    TypedCellParameterVector<CellType::EIF_cond_exp_isfa_ista> &vec,
+    euter::TypedCellParameterVector<euter::CellType::EIF_cond_exp_isfa_ista>>(
+    euter::TypedCellParameterVector<euter::CellType::EIF_cond_exp_isfa_ista>
+        &vec,
     const cypress::PopulationBase &pop);
 
 void cypress::BrainScaleS::set_population_parameters(
-    PopulationPtr &bs_pop, const cypress::PopulationBase &pop)
+    euter::PopulationPtr &bs_pop, const cypress::PopulationBase &pop)
 {
 	if (bs_pop == nullptr) {
 		return;
 	}
 	if (&(pop.type()) == &cypress::SpikeSourceArray::inst()) {
-		auto &params =
-		    reinterpret_cast<
-		        TypedCellParameterVector<CellType::SpikeSourceArray> &>(
-		        bs_pop->parameters())
-		        .parameters();
+		auto &params = reinterpret_cast<euter::TypedCellParameterVector<
+		    euter::CellType::SpikeSourceArray> &>(bs_pop->parameters())
+		                   .parameters();
 		for (size_t neuron = 0; neuron < pop.size(); neuron++) {
 			params[neuron].spike_times = pop[neuron].parameters().parameters();
 		}
@@ -269,9 +271,9 @@ void cypress::BrainScaleS::set_population_parameters(
 
 	bool homogeneous = pop.homogeneous_parameters();
 	if (&(pop.type()) == &cypress::IfCondExp::inst()) {
-		auto &params =
-		    reinterpret_cast<TypedCellParameterVector<CellType::IF_cond_exp> &>(
-		        bs_pop->parameters());
+		auto &params = reinterpret_cast<
+		    euter::TypedCellParameterVector<euter::CellType::IF_cond_exp> &>(
+		    bs_pop->parameters());
 		const auto &par_names = pop.type().parameter_names;
 
 		for (size_t par = 0; par < par_names.size(); par++) {
@@ -284,9 +286,8 @@ void cypress::BrainScaleS::set_population_parameters(
 		}
 	}
 	else if (&(pop.type()) == &cypress::EifCondExpIsfaIsta::inst()) {
-		auto &params = reinterpret_cast<
-		    TypedCellParameterVector<CellType::EIF_cond_exp_isfa_ista> &>(
-		    bs_pop->parameters());
+		auto &params = reinterpret_cast<euter::TypedCellParameterVector<
+		    euter::CellType::EIF_cond_exp_isfa_ista> &>(bs_pop->parameters());
 		const auto &par_names = pop.type().parameter_names;
 
 		for (size_t par = 0; par < par_names.size(); par++) {
@@ -307,18 +308,16 @@ void cypress::BrainScaleS::set_population_parameters(
 bool cypress::BrainScaleS::warn_gsyn_emitted = false;
 
 void cypress::BrainScaleS::set_population_records(
-    PopulationPtr &bs_pop, const cypress::PopulationBase &pop)
+    euter::PopulationPtr &bs_pop, const cypress::PopulationBase &pop)
 {
 	if (bs_pop == nullptr) {
 		return;
 	}
 	const bool homogeneous_rec = pop.homogeneous_record();
 	if (&(pop.type()) == &cypress::SpikeSourceArray::inst()) {
-		auto &params =
-		    reinterpret_cast<
-		        TypedCellParameterVector<CellType::SpikeSourceArray> &>(
-		        bs_pop->parameters())
-		        .parameters();
+		auto &params = reinterpret_cast<euter::TypedCellParameterVector<
+		    euter::CellType::SpikeSourceArray> &>(bs_pop->parameters())
+		                   .parameters();
 		if (homogeneous_rec) {
 			if (pop.signals().is_recording(0)) {
 				set_hom_rec_spikes(params);
@@ -330,7 +329,8 @@ void cypress::BrainScaleS::set_population_records(
 		return;
 	}
 	auto &params =
-	    reinterpret_cast<TypedCellParameterVector<CellType::IF_cond_exp> &>(
+	    reinterpret_cast<
+	        euter::TypedCellParameterVector<euter::CellType::IF_cond_exp> &>(
 	        bs_pop->parameters())
 	        .parameters();
 	if (homogeneous_rec) {
@@ -341,7 +341,7 @@ void cypress::BrainScaleS::set_population_records(
 	}
 }
 
-boost::shared_ptr<::Connector> cypress::BrainScaleS::get_connector(
+boost::shared_ptr<euter::Connector> cypress::BrainScaleS::get_connector(
     const cypress::ConnectionDescriptor &conn)
 {
 	if (conn.connector().synapse_name() != "StaticSynapse") {
@@ -354,32 +354,33 @@ boost::shared_ptr<::Connector> cypress::BrainScaleS::get_connector(
 	auto &params = conn.connector().synapse()->parameters();
 	auto &connector = conn.connector();
 	if (name == "AllToAllConnector") {
-		return boost::make_shared<::AllToAllConnector>(
+		return boost::make_shared<euter::AllToAllConnector>(
 		    connector.allow_self_connections(), params[0], params[1]);
 	}
 	else if (name == "OneToOneConnector") {
-		return boost::make_shared<::OneToOneConnector>(
+		return boost::make_shared<euter::OneToOneConnector>(
 		    connector.allow_self_connections(), params[0], params[1]);
 	}
 	else if (name == "FixedFanInConnector") {
-		return boost::make_shared<::FixedNumberPreConnector>(
+		return boost::make_shared<euter::FixedNumberPreConnector>(
 		    connector.additional_parameter(),
 		    connector.allow_self_connections(), params[0], params[1]);
 	}
 	else if (name == "FixedFanOutConnector") {
-		return boost::make_shared<::FixedNumberPostConnector>(
+		return boost::make_shared<euter::FixedNumberPostConnector>(
 		    connector.additional_parameter(),
 		    connector.allow_self_connections(), params[0], params[1]);
 	}
 	else if (name == "RandomConnector") {
-		return boost::make_shared<::FixedProbabilityConnector>(
+		return boost::make_shared<euter::FixedProbabilityConnector>(
 		    connector.additional_parameter(),
 		    connector.allow_self_connections(), params[0], params[1]);
 	}
-	return boost::shared_ptr<::Connector>();
+	return boost::shared_ptr<euter::Connector>();
 }
 
-std::tuple<boost::shared_ptr<::Connector>, boost::shared_ptr<::Connector>>
+std::tuple<boost::shared_ptr<euter::Connector>,
+           boost::shared_ptr<euter::Connector>>
 cypress::BrainScaleS::get_list_connector(
     const cypress::ConnectionDescriptor &conn,
     std::vector<cypress::LocalConnection> &conns_full)
@@ -397,13 +398,13 @@ cypress::BrainScaleS::get_list_connector(
 		}
 		// default = 0 --> ignore!
 	}
-	ConnectorTypes::vector_type weights(n_exhs);
-	ConnectorTypes::vector_type delays(n_exhs);
-	auto conns_temp = ::FromListConnector::Connections(n_exhs);
+	euter::ConnectorTypes::vector_type weights(n_exhs);
+	euter::ConnectorTypes::vector_type delays(n_exhs);
+	auto conns_temp = euter::FromListConnector::Connections(n_exhs);
 
-	ConnectorTypes::vector_type weights_inh(n_inhs);
-	ConnectorTypes::vector_type delays_inh(n_inhs);
-	auto conns_temp_inh = ::FromListConnector::Connections(n_inhs);
+	euter::ConnectorTypes::vector_type weights_inh(n_inhs);
+	euter::ConnectorTypes::vector_type delays_inh(n_inhs);
+	auto conns_temp_inh = euter::FromListConnector::Connections(n_inhs);
 
 	size_t counter_exh = 0, counter_inh = 0;
 
@@ -425,18 +426,17 @@ cypress::BrainScaleS::get_list_connector(
 	};
 
 	return std::make_tuple(
-	    boost::make_shared<::FromListConnector>(std::move(conns_temp), weights,
-	                                            delays),
-	    boost::make_shared<::FromListConnector>(std::move(conns_temp_inh),
-	                                            weights_inh, delays_inh));
+	    boost::make_shared<euter::FromListConnector>(std::move(conns_temp),
+	                                                 weights, delays),
+	    boost::make_shared<euter::FromListConnector>(std::move(conns_temp_inh),
+	                                                 weights_inh, delays_inh));
 }
 
-::PopulationView cypress::BrainScaleS::get_popview(PopulationPtr bs_pop,
-                                                   const size_t &start,
-                                                   const size_t &end)
+euter::PopulationView cypress::BrainScaleS::get_popview(
+    euter::PopulationPtr bs_pop, const size_t &start, const size_t &end)
 {
 	if (bs_pop == nullptr) {
-		return ::PopulationView();
+		return euter::PopulationView();
 	}
 	if (start == 0 and end == bs_pop->size()) {
 		return bs_pop;
@@ -445,13 +445,13 @@ cypress::BrainScaleS::get_list_connector(
 	for (size_t i = start; i < std::min(end, bs_pop->size()); i++) {
 		mask.set(i);
 	}
-	return ::PopulationView(bs_pop, mask);
+	return euter::PopulationView(bs_pop, mask);
 }
 
 void cypress::BrainScaleS::manual_placement(
     const cypress::Json &hicann,
     boost::shared_ptr<pymarocco::PyMarocco> marocco,
-    std::vector<PopulationPtr> &bs_populations)
+    std::vector<euter::PopulationPtr> &bs_populations)
 {
 	if (hicann.is_number()) {
 		if (!hicann.is_number_integer()) {
@@ -492,7 +492,7 @@ void cypress::BrainScaleS::manual_placement(
 
 void cypress::BrainScaleS::fetch_data(
     const std::vector<cypress::PopulationBase> &populations,
-    const std::vector<PopulationPtr> &bs_populations)
+    const std::vector<euter::PopulationPtr> &bs_populations)
 {
 	for (size_t i = 0; i < populations.size(); i++) {
 		if (populations[i].size() == 0) {
@@ -553,7 +553,7 @@ void cypress::BrainScaleS::fetch_data(
 }
 namespace {
 inline auto pop_to_bio_neurons(marocco::placement::results::Placement &results,
-                               PopulationPtr &source)
+                               euter::PopulationPtr &source)
 {
 	std::vector<std::reference_wrapper<const marocco::BioNeuron>> ret;
 	for (auto &it : results.find(source->id())) {
@@ -597,8 +597,9 @@ inline auto get_synapse(size_t conn_id, const marocco::BioNeuron &bio_nrn_a,
 }
 
 void set_low_level_weights_list(
-    PopulationPtr &source, PopulationPtr &target, ProjectionPtr &conn_exc,
-    ProjectionPtr &conn_inh, std::vector<cypress::LocalConnection> &vec,
+    euter::PopulationPtr &source, euter::PopulationPtr &target,
+    euter::ProjectionPtr &conn_exc, euter::ProjectionPtr &conn_inh,
+    std::vector<cypress::LocalConnection> &vec,
     boost::shared_ptr<pymarocco::runtime::Runtime> runtime)
 {
 	auto &results = runtime->results()->placement;
@@ -654,7 +655,7 @@ void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
 	auto start = std::chrono::system_clock::now();
 	init_logger();
 
-	ObjectStore store;
+	euter::ObjectStore store;
 	auto marocco = pymarocco::PyMarocco::create();
 	marocco->continue_despite_synapse_loss = m_synapse_loss;
 
@@ -680,16 +681,17 @@ void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
 
 	auto runtime =
 	    pymarocco::runtime::Runtime::create(HMF::Coordinate::Wafer(m_wafer));
-	// Save marocco to ObjectStore
-	ObjectStore::Settings settings;
-	ObjectStore::metadata_map metadata;
+	// Save marocco to euter::ObjectStore
+	euter::ObjectStore::Settings settings;
+	euter::ObjectStore::metadata_map metadata;
 	metadata["marocco"] = marocco;
 	metadata["marocco_runtime"] = runtime;
 	store.setup(settings, metadata);  // runtime object
 
 	// Create populations
 	const std::vector<PopulationBase> &populations = source.populations();
-	std::vector<PopulationPtr> bs_populations = create_pops(store, populations);
+	std::vector<euter::PopulationPtr> bs_populations =
+	    create_pops(store, populations);
 
 	for (size_t i = 0; i < populations.size(); i++) {
 		set_population_parameters(bs_populations[i], populations[i]);
@@ -697,12 +699,12 @@ void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
 	}
 
 	// Random generator used for random connectors
-	boost::shared_ptr<RandomGenerator> rng =
-	    boost::make_shared<NativeRandomGenerator>(1234);
+	boost::shared_ptr<euter::RandomGenerator> rng =
+	    boost::make_shared<euter::NativeRandomGenerator>(1234);
 
-	std::vector<ProjectionPtr> projections;
-	std::vector<ProjectionPtr> list_projections_exc;
-	std::vector<ProjectionPtr> list_projections_inh;
+	std::vector<euter::ProjectionPtr> projections;
+	std::vector<euter::ProjectionPtr> list_projections_exc;
+	std::vector<euter::ProjectionPtr> list_projections_inh;
 	std::vector<std::vector<cypress::LocalConnection>> list_connections;
 
 	for (size_t i = 0; i < source.connections().size(); i++) {
@@ -718,20 +720,20 @@ void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
 		// TODO dynamic synapses
 		auto connect = get_connector(conn);
 		if (connect) {
-			projections.emplace_back(
-			    ::Projection::create(store, source, target, connect, rng, "",
-			                         recep_type));  //+ Synapse_dynamics , label
+			projections.emplace_back(euter::Projection::create(
+			    store, source, target, connect, rng, "",
+			    recep_type));  //+ Synapse_dynamics , label
 		}
 		else {
-			projections.emplace_back(ProjectionPtr());
+			projections.emplace_back(euter::ProjectionPtr());
 			list_connections.emplace_back();
 			auto tuple = get_list_connector(conn, list_connections.back());
-			list_projections_exc.emplace_back(
-			    ::Projection::create(store, source, target, std::get<0>(tuple),
-			                         rng, "", "excitatory"));
-			list_projections_inh.emplace_back(
-			    ::Projection::create(store, source, target, std::get<1>(tuple),
-			                         rng, "", "inhibitory"));
+			list_projections_exc.emplace_back(euter::Projection::create(
+			    store, source, target, std::get<0>(tuple), rng, "",
+			    "excitatory"));
+			list_projections_inh.emplace_back(euter::Projection::create(
+			    store, source, target, std::get<1>(tuple), rng, "",
+			    "inhibitory"));
 		}
 	}
 

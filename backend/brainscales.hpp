@@ -49,6 +49,7 @@
 #include "sthal/Wafer.h"
 
 namespace cypress {
+
 /**
  * The BrainScaleS backend directly runs the emulation
  * using PyNN. Must be used on the BrainScaleS server either directly (logged in
@@ -124,8 +125,9 @@ public:
 	 * @param populations cypress population vector
 	 * @return returns a vector with pointers to BS populations
 	 */
-	static std::vector<PopulationPtr> create_pops(
-	    ObjectStore &store, const std::vector<PopulationBase> &populations);
+	static std::vector<euter::PopulationPtr> create_pops(
+	    euter::ObjectStore &store,
+	    const std::vector<PopulationBase> &populations);
 
 	/**
 	 * Sets parameters of src to bs parameters for the IF_cond_exp model.
@@ -134,7 +136,7 @@ public:
 	 * @oaram src source cypress parameters
 	 */
 	static inline void set_BS_params(
-	    CellTypeTraits<CellType::IF_cond_exp>::Parameters &tar,
+	    euter::CellTypeTraits<euter::CellType::IF_cond_exp>::Parameters &tar,
 	    const NeuronParameters &src)
 	{
 		tar.tau_refrac = src[4];
@@ -157,7 +159,8 @@ public:
 	 * @oaram src source cypress parameters
 	 */
 	static inline void set_BS_params(
-	    CellTypeTraits<CellType::EIF_cond_exp_isfa_ista>::Parameters &tar,
+	    euter::CellTypeTraits<
+	        euter::CellType::EIF_cond_exp_isfa_ista>::Parameters &tar,
 	    const NeuronParameters &src)
 	{
 		tar.cm = src[0];
@@ -202,7 +205,7 @@ public:
 	 * @param bs_pop target BS population, mirrored to
 	 * @param pop source cypress population
 	 */
-	static void set_population_parameters(PopulationPtr &bs_pop,
+	static void set_population_parameters(euter::PopulationPtr &bs_pop,
 	                                      const PopulationBase &pop);
 
 	static bool warn_gsyn_emitted;
@@ -325,7 +328,7 @@ public:
 	 * @param bs_pop BS population pointer (target)
 	 * @param pop cypress population (source)
 	 */
-	static void set_population_records(PopulationPtr &bs_pop,
+	static void set_population_records(euter::PopulationPtr &bs_pop,
 	                                   const PopulationBase &pop);
 
 	/**
@@ -335,7 +338,7 @@ public:
 	 * @param conn cypress connection description to be converted
 	 * @return pointer to BS connector, directly used in Projection
 	 */
-	static boost::shared_ptr<::Connector> get_connector(
+	static boost::shared_ptr<euter::Connector> get_connector(
 	    const cypress::ConnectionDescriptor &conn);
 
 	/**
@@ -349,8 +352,8 @@ public:
 	 * @return tuple of pointers to BS connectors, <0> for excitatory and <1>
 	 * for inhibitory connections
 	 */
-	static std::tuple<boost::shared_ptr<::Connector>,
-	                  boost::shared_ptr<::Connector>>
+	static std::tuple<boost::shared_ptr<euter::Connector>,
+	                  boost::shared_ptr<euter::Connector>>
 	get_list_connector(const cypress::ConnectionDescriptor &conn,
 	                   std::vector<cypress::LocalConnection> &conns_full);
 
@@ -362,8 +365,9 @@ public:
 	 * @param end last +1 neuron in view
 	 * @return BS population view
 	 */
-	static ::PopulationView get_popview(PopulationPtr bs_pop,
-	                                    const size_t &start, const size_t &end);
+	static euter::PopulationView get_popview(euter::PopulationPtr bs_pop,
+	                                         const size_t &start,
+	                                         const size_t &end);
 	/**
 	 * Trigger manual placement of all populations on a given set of hicanns
 	 * @param hican json object being array of ints or ints, representing
@@ -374,7 +378,7 @@ public:
 	 */
 	static void manual_placement(
 	    const Json &hicann, boost::shared_ptr<pymarocco::PyMarocco> marocco,
-	    std::vector<PopulationPtr> &bs_populations);
+	    std::vector<euter::PopulationPtr> &bs_populations);
 
 	/**
 	 * Setting low lever parameter for the BrainScaleS System
@@ -393,8 +397,9 @@ public:
 	 * @param populations cypress pops, in which data is put
 	 * @param bs_populations BS pops, from which the data is fetched
 	 */
-	static void fetch_data(const std::vector<PopulationBase> &populations,
-	                       const std::vector<PopulationPtr> &bs_populations);
+	static void fetch_data(
+	    const std::vector<PopulationBase> &populations,
+	    const std::vector<euter::PopulationPtr> &bs_populations);
 };
 }  // namespace cypress
 

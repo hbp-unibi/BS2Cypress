@@ -27,7 +27,7 @@
 #include <sstream>
 
 namespace cypress {
-
+using namespace euter;
 TEST(BrainScaleS, init_logger) { EXPECT_NO_THROW(BrainScaleS::init_logger()); }
 
 TEST(BrainScaleS, create_pops)
@@ -509,7 +509,7 @@ TEST(BrainScaleS, get_list_connector)
 TEST(BrainScaleS, get_popview)
 {
 	ObjectStore store;
-	auto pop = ::Population::create(store, 10, CellType::IF_cond_exp);
+	auto pop = euter::Population::create(store, 10, CellType::IF_cond_exp);
 
 	auto view = BrainScaleS::get_popview(pop, 0, 10);
 	EXPECT_EQ(view.size(), size_t(10));
@@ -632,7 +632,7 @@ TEST(BrainScaleS, low_level_from_list)
 	auto pop = net.population("target");
 	for (size_t i = 1; i < max_weight; i++) {
 		std::cout << pop[i].signals().data(0).size() << " bigger ? "
-		          << pop[i-1].signals().data(0).size() << std::endl;
+		          << pop[i - 1].signals().data(0).size() << std::endl;
 		EXPECT_TRUE(pop[i].signals().data(0).size() >
 		            pop[i - 1].signals().data(0).size());
 	}

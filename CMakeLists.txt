@@ -66,7 +66,7 @@ include_directories(
         ${BS_INCLUDE_PATH}/marocco
         ${BS_INCLUDE_PATH}/pywrap/src
         ${BS_INCLUDE_PATH}/halbe
-        ${BS_INCLUDE_PATH}/halco
+        ${BS_INCLUDE_PATH}/halco/include
         ${BS_INCLUDE_PATH}/ztl
         ${BS_INCLUDE_PATH}/rant
         ${BS_INCLUDE_PATH}/redman/include
