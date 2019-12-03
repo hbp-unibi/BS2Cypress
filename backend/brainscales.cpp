@@ -17,8 +17,8 @@
  */
 #include "brainscales.hpp"
 
-#include <algorithm>
 //#include <boost/make_shared.hpp>
+#include <algorithm>
 #include <csignal>
 #include <fstream>
 #include <functional>
@@ -462,9 +462,14 @@ void cypress::BrainScaleS::manual_placement(
 			if (pop == nullptr) {
 				continue;
 			}
+			marocco::assignment::PopulationSlice::mask_type full_mask(
+			    pop->size());
+			// fill full mask with values from 0 to max_size-1
+			std::iota(full_mask.begin(), full_mask.end(), 0);
 			marocco->manual_placement.on_hicann(
-			    pop->id(), HMF::Coordinate::HICANNOnWafer(
-			                   HMF::Coordinate::Enum(hicann.get<int>())));
+			    pop->id(), full_mask,
+			    HMF::Coordinate::HICANNOnWafer(
+			        HMF::Coordinate::Enum(hicann.get<int>())));
 		}
 	}
 	else if (hicann.is_array()) {
@@ -481,7 +486,11 @@ void cypress::BrainScaleS::manual_placement(
 			if (pop == nullptr) {
 				continue;
 			}
-			marocco->manual_placement.on_hicann(pop->id(), hicanns);
+			marocco::assignment::PopulationSlice::mask_type full_mask(
+			    pop->size());
+			// fill full mask with values from 0 to max_size-1
+			std::iota(full_mask.begin(), full_mask.end(), 0);
+			marocco->manual_placement.on_hicann(pop->id(), full_mask, hicanns);
 		}
 	}
 	else {
