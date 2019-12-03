@@ -641,6 +641,7 @@ void set_low_level_weights_list(
 			cypress::global_logger().debug(
 			    "cypress",
 			    "Ignoring missing synapse in setting low-level weights");
+			continue;
 		}
 		auto hicann = syn_hand[0].get()->toHICANNOnWafer();
 		auto proxy = (*runtime->wafer())[hicann].synapses[*(syn_hand[0].get())];
