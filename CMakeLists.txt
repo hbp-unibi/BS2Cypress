@@ -95,7 +95,7 @@ target_link_libraries(BS2CYPRESS
     PRIVATE marocco_parameters
     PRIVATE marocco_coordinates
     PRIVATE marocco_results
-    PRIVATE pymarocco
+    PRIVATE pymarocco_cpp
     PRIVATE halco_common
     PRIVATE halco_hicann_v2
     PRIVATE sthal
