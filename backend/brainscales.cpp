@@ -355,26 +355,26 @@ boost::shared_ptr<euter::Connector> cypress::BrainScaleS::get_connector(
 	auto &connector = conn.connector();
 	if (name == "AllToAllConnector") {
 		return boost::make_shared<euter::AllToAllConnector>(
-		    connector.allow_self_connections(), params[0], params[1]);
+		    connector.allow_self_connections(), fabs(params[0]), params[1]);
 	}
 	else if (name == "OneToOneConnector") {
 		return boost::make_shared<euter::OneToOneConnector>(
-		    connector.allow_self_connections(), params[0], params[1]);
+		    connector.allow_self_connections(), fabs(params[0]), params[1]);
 	}
 	else if (name == "FixedFanInConnector") {
 		return boost::make_shared<euter::FixedNumberPreConnector>(
 		    connector.additional_parameter(),
-		    connector.allow_self_connections(), params[0], params[1]);
+		    connector.allow_self_connections(), fabs(params[0]), params[1]);
 	}
 	else if (name == "FixedFanOutConnector") {
 		return boost::make_shared<euter::FixedNumberPostConnector>(
 		    connector.additional_parameter(),
-		    connector.allow_self_connections(), params[0], params[1]);
+		    connector.allow_self_connections(), fabs(params[0]), params[1]);
 	}
 	else if (name == "RandomConnector") {
 		return boost::make_shared<euter::FixedProbabilityConnector>(
 		    connector.additional_parameter(),
-		    connector.allow_self_connections(), params[0], params[1]);
+		    connector.allow_self_connections(), fabs(params[0]), params[1]);
 	}
 	return boost::shared_ptr<euter::Connector>();
 }
@@ -589,11 +589,6 @@ inline auto get_synapse(size_t conn_id, const marocco::BioNeuron &bio_nrn_a,
 	    std::reference_wrapper<const marocco::routing::results::Synapses::
 	                               optional_hardware_synapse_type>>
 	    ret;
-	/*std::cout << "get_synapse" << std::endl;
-	std::cout << "Neuron : " << bio_nrn_a.neuron_index() << " population "
-	          << bio_nrn_a.population() << std::endl;
-	std::cout << "Neuron : " << bio_nrn_b.neuron_index() << " population "
-	          << bio_nrn_b.population() << std::endl;*/
 	for (auto &it : results_synapses.find(conn_id, bio_nrn_a, bio_nrn_b)) {
 		ret.push_back(std::ref(it.hardware_synapse()));
 	}
@@ -726,7 +721,6 @@ void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
 		std::string recep_type = conn.connector().synapse()->parameters()[0] > 0
 		                             ? "excitatory"
 		                             : "inhibitory";
-
 		// TODO dynamic synapses
 		auto connect = get_connector(conn);
 		if (connect) {
@@ -790,7 +784,7 @@ void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
 					auto proxy =
 					    (*runtime->wafer())[hicann].synapses[*syn_hand];
 					proxy.weight = HMF::HICANN::SynapseWeight(
-					    conn.connector().synapse()->parameters()[0]);
+					    fabs(conn.connector().synapse()->parameters()[0]));
 				}
 			}
 		}
