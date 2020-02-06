@@ -453,10 +453,11 @@ void cypress::BrainScaleS::manual_placement(
     boost::shared_ptr<pymarocco::PyMarocco> marocco,
     std::vector<euter::PopulationPtr> &bs_populations)
 {
-	if (hicann.is_number()) {
+	if (hicann.is_number()) {  // Single HICANN for all
 		if (!hicann.is_number_integer()) {
 			throw cypress::ExecutionError(
-			    "Hicann must be integer or array of integers!");
+			    "Hicann must be integer or array of (arrays of) "
+			    "integers!");
 		}
 		for (auto pop : bs_populations) {
 			if (pop == nullptr) {
@@ -472,30 +473,97 @@ void cypress::BrainScaleS::manual_placement(
 			        HMF::Coordinate::Enum(hicann.get<int>())));
 		}
 	}
-	else if (hicann.is_array()) {
+	else if (hicann.is_array()) {  // Multiple HICANNs or
+		if (hicann.size() == 0) {  // no HICANN at all
+			return;
+		}
 		std::vector<HMF::Coordinate::HICANNOnWafer> hicanns;
+		bool contains_arrays = false;
 		for (auto i : hicann) {
 			if (!i.is_number_integer()) {
-				throw cypress::ExecutionError(
-				    "Hicann must be integer or array of integers!");
+				if (i.is_array()) {
+					contains_arrays = true;  // Give different hicanns for
+					                         // different populations
+					break;
+				}
+				else {
+					throw cypress::ExecutionError(
+					    "Hicann must be integer or array of (arrays of) "
+					    "integers!");
+				}
 			}
 			hicanns.emplace_back(HMF::Coordinate::HICANNOnWafer(
 			    HMF::Coordinate::Enum(i.get<int>())));
 		}
-		for (auto pop : bs_populations) {
-			if (pop == nullptr) {
-				continue;
+		if (!contains_arrays) {  // Use all
+			for (auto pop : bs_populations) {
+				if (pop == nullptr) {
+					continue;
+				}
+				marocco::assignment::PopulationSlice::mask_type full_mask(
+				    pop->size());
+				// fill full mask with values from 0 to max_size-1
+				std::iota(full_mask.begin(), full_mask.end(), 0);
+				marocco->manual_placement.on_hicann(pop->id(), full_mask,
+				                                    hicanns);
 			}
-			marocco::assignment::PopulationSlice::mask_type full_mask(
-			    pop->size());
-			// fill full mask with values from 0 to max_size-1
-			std::iota(full_mask.begin(), full_mask.end(), 0);
-			marocco->manual_placement.on_hicann(pop->id(), full_mask, hicanns);
+		}
+		else {  // Use different hicanns for  different populations
+			if (hicann.size() != bs_populations.size()) {
+				throw cypress::ExecutionError(
+				    "Hicann parameter is a list of lists, but the size of the "
+				    "list (" +
+				    std::to_string(hicann.size()) +
+				    ") does not match the number of populations (" +
+				    std::to_string(bs_populations.size()) +
+				    ")! (sources included)");
+			}
+			for (size_t i = 0; i < bs_populations.size(); i++) {
+				auto &pop = bs_populations[i];
+				if (pop == nullptr) {
+					continue;
+				}
+				if (hicann[i].is_number_integer()) {
+					marocco::assignment::PopulationSlice::mask_type full_mask(
+					    pop->size());
+					// fill full mask with values from 0 to max_size-1
+					std::iota(full_mask.begin(), full_mask.end(), 0);
+					marocco->manual_placement.on_hicann(
+					    pop->id(), full_mask,
+					    HMF::Coordinate::HICANNOnWafer(
+					        HMF::Coordinate::Enum(hicann[i].get<int>())));
+				}
+				else if (hicann[i].is_array()) {  // Multiple Hicanns for pop
+					hicanns.clear();
+					for (auto hic : hicann[i]) {
+						if (!hic.is_number_integer()) {
+							throw cypress::ExecutionError(
+							    "Hicann must be integer or array of (arrays "
+							    "of) "
+							    "integers!");
+						}
+						hicanns.emplace_back(HMF::Coordinate::HICANNOnWafer(
+						    HMF::Coordinate::Enum(hic.get<int>())));
+					}
+					marocco::assignment::PopulationSlice::mask_type full_mask(
+					    pop->size());
+					// fill full mask with values from 0 to max_size-1
+					std::iota(full_mask.begin(), full_mask.end(), 0);
+					marocco->manual_placement.on_hicann(pop->id(), full_mask,
+					                                    hicanns);
+				}
+				else {
+					throw cypress::ExecutionError(
+					    "Hicann must be integer or array of (arrays of) "
+					    "integers!");
+				}
+			}
 		}
 	}
 	else {
 		throw cypress::ExecutionError(
-		    "Hicann must be integer or array of integers!");
+		    "Hicann must be integer or array of (arrays of) "
+		    "integers!");
 	}
 }
 
