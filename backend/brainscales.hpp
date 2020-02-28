@@ -30,25 +30,27 @@
 #ifndef CYPRESS_BACKEND_BRAINSCALES_HPP
 #define CYPRESS_BACKEND_BRAINSCALES_HPP
 
-#include <stdexcept>
-#include <string>
-
+#include <boost/make_shared.hpp>
 #include <cypress/core/backend.hpp>
 #include <cypress/core/network.hpp>
 #include <cypress/core/network_base.hpp>
 #include <cypress/core/network_base_objects.hpp>
 #include <cypress/util/json.hpp>
 #include <cypress/util/logger.hpp>
+#include <stdexcept>
+#include <string>
 
-#include <boost/make_shared.hpp>
 #include "euter/celltypes.h"
 #include "euter/objectstore.h"
 #include "euter/population.h"
 #include "euter/population_view.h"
 #include "pymarocco/PyMarocco.h"
+//#include "pymarocco/runtime/Runtime.h"
 #include "sthal/Wafer.h"
 
 namespace cypress {
+
+struct _BrainScaleS_intenal_data;
 
 /**
  * The BrainScaleS backend directly runs the emulation
@@ -79,6 +81,8 @@ public:
 	 *    "hicann": [297], // hicanns used for the experiment
 	 *    "digital_weight" : true //directly set low-level digital weights
 	 *    "ess" : true // for simulation of the wafer
+	 *    "keep_mapping": false // True for in the loop simulations, where
+	 * only low-level weights are changed and you want to keep the mapping
 	 * }
 	 */
 	BrainScaleS(const Json &setup = Json());
@@ -109,8 +113,8 @@ private:
 	size_t m_wafer = 33;
 	Json m_hicann = 297;
 	bool m_digital_weight = false;
-	bool m_warn_gsyn_emitted = false;
 	bool m_ess = false;
+	bool m_keep_mapping = false;
 
 public:
 	// Static functions for setting up the network
@@ -348,6 +352,8 @@ public:
 	 * @param conn cypress connection description to be converted
 	 * @param conns_full list of cypress connection vector, in which which
 	 * connection details will be inserted
+	 * @param set_values true for directly setting values, false if values are
+	 * set low level and default value should be used
 	 *
 	 * @return tuple of pointers to BS connectors, <0> for excitatory and <1>
 	 * for inhibitory connections
@@ -355,7 +361,8 @@ public:
 	static std::tuple<boost::shared_ptr<euter::Connector>,
 	                  boost::shared_ptr<euter::Connector>>
 	get_list_connector(const cypress::ConnectionDescriptor &conn,
-	                   std::vector<cypress::LocalConnection> &conns_full);
+	                   std::vector<cypress::LocalConnection> &conns_full,
+	                   bool set_values = true);
 
 	/**
 	 * Create a BS population view
@@ -400,7 +407,12 @@ public:
 	static void fetch_data(
 	    const std::vector<PopulationBase> &populations,
 	    const std::vector<euter::PopulationPtr> &bs_populations);
+
+private:
+	// Internal State variables, really required only if m_keep_mapping = true
+	std::shared_ptr<_BrainScaleS_intenal_data> m_int_data;
 };
+
 }  // namespace cypress
 
 extern "C" {

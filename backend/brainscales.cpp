@@ -62,7 +62,7 @@
 #include <log4cxx/basicconfigurator.h>
 
 // marocco
-#include "hal/Coordinate/iter_all.h"
+#include "halco/common/iter_all.h"
 #include "pymarocco/PyMarocco.h"
 #include "pymarocco/runtime/Runtime.h"
 #include "sthal/HICANN.h"
@@ -72,8 +72,21 @@
 #include "submit.h"
 
 using boost::make_shared;
-namespace C = HMF::Coordinate;
+namespace C = halco::common;
 namespace D = halco::hicann::v2;
+
+struct cypress::_BrainScaleS_intenal_data {
+	bool m_already_mapped = false;
+	euter::ObjectStore store{};
+	boost::shared_ptr<pymarocco::PyMarocco> marocco;
+	boost::shared_ptr<pymarocco::runtime::Runtime> runtime;
+	std::vector<euter::PopulationPtr> bs_populations;
+	std::vector<euter::ProjectionPtr> projections;
+	std::vector<euter::ProjectionPtr> list_projections_exc;
+	std::vector<euter::ProjectionPtr> list_projections_inh;
+	std::vector<std::vector<cypress::LocalConnection>> list_connections;
+};
+
 /**
  * Setting low lever parameter for the BrainScaleS System
  *
@@ -87,7 +100,7 @@ void cypress::BrainScaleS::set_stahl_params(
 	for (auto hicann : wafer->getAllocatedHicannCoordinates()) {
 		auto fgs = (*wafer)[hicann].floating_gates;
 
-		for (auto block : C::iter_all<C::FGBlockOnHICANN>()) {
+		for (auto block : C::iter_all<D::FGBlockOnHICANN>()) {
 			fgs.setShared(block, HMF::HICANN::shared_parameter::V_gmax0, gmax);
 			fgs.setShared(block, HMF::HICANN::shared_parameter::V_gmax1, gmax);
 			fgs.setShared(block, HMF::HICANN::shared_parameter::V_gmax2, gmax);
@@ -95,7 +108,7 @@ void cypress::BrainScaleS::set_stahl_params(
 		}
 
 		for (auto driver : C::iter_all<D::SynapseDriverOnHICANN>()) {
-			for (auto row : C::iter_all<C::RowOnSynapseDriver>()) {
+			for (auto row : C::iter_all<D::RowOnSynapseDriver>()) {
 				(*wafer)[hicann].synapses[driver][row].set_gmax_div(
 				    HMF::HICANN::GmaxDiv(gmax_div));
 			}
@@ -107,7 +120,7 @@ void cypress::BrainScaleS::set_stahl_params(
 			cfg.fg_bias = 0;
 			fgs.setFGConfig(C::Enum(i), cfg);
 		}
-		for (auto block : C::iter_all<C::FGBlockOnHICANN>()) {
+		for (auto block : C::iter_all<D::FGBlockOnHICANN>()) {
 			fgs.setShared(block, HMF::HICANN::shared_parameter::V_dllres, 275);
 			fgs.setShared(block, HMF::HICANN::shared_parameter::V_ccas, 800);
 		}
@@ -177,6 +190,15 @@ cypress::BrainScaleS::BrainScaleS(const Json &setup)
 	if (setup.count("ess") > 0) {
 		m_ess = setup["ess"].get<bool>();
 	}
+	if (setup.count("keep_mapping") > 0) {
+		m_keep_mapping = setup["keep_mapping"].get<bool>();
+	}
+	if (m_keep_mapping && !m_digital_weight) {
+		throw cypress::ExecutionError(
+		    "Keeping the mapping and not using digital weights is not "
+		    "supported!");
+	}
+	m_int_data = std::make_shared<cypress::_BrainScaleS_intenal_data>();
 }
 
 std::vector<euter::PopulationPtr> cypress::BrainScaleS::create_pops(
@@ -383,20 +405,20 @@ std::tuple<boost::shared_ptr<euter::Connector>,
            boost::shared_ptr<euter::Connector>>
 cypress::BrainScaleS::get_list_connector(
     const cypress::ConnectionDescriptor &conn,
-    std::vector<cypress::LocalConnection> &conns_full)
+    std::vector<cypress::LocalConnection> &conns_full, bool set_values)
 {
 	// List connector
 	conn.connect(conns_full);
 	size_t n_exhs = 0;
 	size_t n_inhs = 0;
 	for (size_t i = 0; i < conns_full.size(); i++) {
-		if (conns_full[i].excitatory()) {
-			n_exhs++;
-		}
-		else if (conns_full[i].inhibitory()) {
+		if (conns_full[i].inhibitory()) {
 			n_inhs++;
 		}
-		// default = 0 --> ignore!
+		else {
+			n_exhs++;
+		}
+		// default = 0 --> excitatory!
 	}
 	euter::ConnectorTypes::vector_type weights(n_exhs);
 	euter::ConnectorTypes::vector_type delays(n_exhs);
@@ -409,19 +431,21 @@ cypress::BrainScaleS::get_list_connector(
 	size_t counter_exh = 0, counter_inh = 0;
 
 	for (size_t i = 0; i < conns_full.size(); i++) {
-		if (conns_full[i].excitatory()) {
-			weights[counter_exh] = conns_full[i].SynapseParameters[0];
-			delays[counter_exh] = conns_full[i].SynapseParameters[1];
-			conns_temp[counter_exh] = {size_t(conns_full[i].src),
-			                           size_t(conns_full[i].tar)};
-			counter_exh++;
-		}
-		else if (conns_full[i].inhibitory()) {
-			weights_inh[counter_inh] = -conns_full[i].SynapseParameters[0];
+		if (conns_full[i].inhibitory()) {
+			weights_inh[counter_inh] =
+			    set_values ? -conns_full[i].SynapseParameters[0] : 0.1;
 			delays_inh[counter_inh] = conns_full[i].SynapseParameters[1];
 			conns_temp_inh[counter_inh] = {size_t(conns_full[i].src),
 			                               size_t(conns_full[i].tar)};
 			counter_inh++;
+		}
+		else {
+			weights[counter_exh] =
+			    set_values ? conns_full[i].SynapseParameters[0] : 0.1;
+			delays[counter_exh] = conns_full[i].SynapseParameters[1];
+			conns_temp[counter_exh] = {size_t(conns_full[i].src),
+			                           size_t(conns_full[i].tar)};
+			counter_exh++;
 		}
 	};
 
@@ -469,15 +493,14 @@ void cypress::BrainScaleS::manual_placement(
 			std::iota(full_mask.begin(), full_mask.end(), 0);
 			marocco->manual_placement.on_hicann(
 			    pop->id(), full_mask,
-			    HMF::Coordinate::HICANNOnWafer(
-			        HMF::Coordinate::Enum(hicann.get<int>())));
+			    D::HICANNOnWafer(C::Enum(hicann.get<int>())));
 		}
 	}
 	else if (hicann.is_array()) {  // Multiple HICANNs or
 		if (hicann.size() == 0) {  // no HICANN at all
 			return;
 		}
-		std::vector<HMF::Coordinate::HICANNOnWafer> hicanns;
+		std::vector<D::HICANNOnWafer> hicanns;
 		bool contains_arrays = false;
 		for (auto i : hicann) {
 			if (!i.is_number_integer()) {
@@ -492,8 +515,7 @@ void cypress::BrainScaleS::manual_placement(
 					    "integers!");
 				}
 			}
-			hicanns.emplace_back(HMF::Coordinate::HICANNOnWafer(
-			    HMF::Coordinate::Enum(i.get<int>())));
+			hicanns.emplace_back(D::HICANNOnWafer(C::Enum(i.get<int>())));
 		}
 		if (!contains_arrays) {  // Use all
 			for (auto pop : bs_populations) {
@@ -530,8 +552,7 @@ void cypress::BrainScaleS::manual_placement(
 					std::iota(full_mask.begin(), full_mask.end(), 0);
 					marocco->manual_placement.on_hicann(
 					    pop->id(), full_mask,
-					    HMF::Coordinate::HICANNOnWafer(
-					        HMF::Coordinate::Enum(hicann[i].get<int>())));
+					    D::HICANNOnWafer(C::Enum(hicann[i].get<int>())));
 				}
 				else if (hicann[i].is_array()) {  // Multiple Hicanns for pop
 					hicanns.clear();
@@ -542,8 +563,8 @@ void cypress::BrainScaleS::manual_placement(
 							    "of) "
 							    "integers!");
 						}
-						hicanns.emplace_back(HMF::Coordinate::HICANNOnWafer(
-						    HMF::Coordinate::Enum(hic.get<int>())));
+						hicanns.emplace_back(
+						    D::HICANNOnWafer(C::Enum(hic.get<int>())));
 					}
 					marocco::assignment::PopulationSlice::mask_type full_mask(
 					    pop->size());
@@ -678,157 +699,208 @@ void set_low_level_weights_list(
 	auto bio_nrns_a = pop_to_bio_neurons(results, source);
 	auto bio_nrns_b = pop_to_bio_neurons(results, target);
 	auto &results_synapses = runtime->results()->synapse_routing.synapses();
+	size_t counter = 0;
 
 	for (cypress::LocalConnection &i : vec) {
-		if (i.SynapseParameters[0] == 0) {
-			continue;  // Weight==0 synapses are deleted
-		}
 		size_t conn_id;
 		uint8_t weight = 0;
-		if (i.excitatory()) {
-			conn_id = conn_exc->id();
-			weight = i.SynapseParameters[0];
-		}
-		else if (i.inhibitory()) {
+		if (i.inhibitory()) {
 			conn_id = conn_inh->id();
-			weight = -i.SynapseParameters[0];
+			weight = -std::round(i.SynapseParameters[0]);
 		}
 		else {
-			continue;  // ignore null synapse
+			conn_id = conn_exc->id();
+			weight = std::round(i.SynapseParameters[0]);
+		}
+		if (weight > 15) {
+			weight = 15;
 		}
 
 		auto syn_hand = get_synapse(conn_id, bio_nrns_a[i.src],
 		                            bio_nrns_b[i.tar], results_synapses);
 		if (syn_hand.size() == 0) {
 			// No synapse found --> probably not mapped to hw/lost
-			cypress::global_logger().debug(
-			    "cypress",
-			    "Ignoring missing synapse in setting low-level weights");
+			counter++;
 			continue;
 		}
+
 		auto hicann = syn_hand[0].get()->toHICANNOnWafer();
 		auto proxy = (*runtime->wafer())[hicann].synapses[*(syn_hand[0].get())];
 		proxy.weight = HMF::HICANN::SynapseWeight(weight);
+	}
+	if (counter > 0) {
+		cypress::global_logger().warn(
+		    "cypress",
+		    "Ignoring missing synapses in setting low-level weights " +
+		        std::to_string(counter));
 	}
 }
 }  // namespace
 void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
                                   Real duration) const
 {
-	cypress::global_logger().info(
-	    "cypress",
-	    "Running with configuration: neuron size: " +
-	        std::to_string(m_neuron_size) +
-	        ", big_capacitor: " + (m_use_big_capacitor ? "true" : "false") +
-	        ", bandwidth: " + std::to_string(m_bandwidth) + ", synapse loss: " +
-	        std::to_string(m_synapse_loss) + ", calib path: " + m_calib_path +
-	        ", wafer: " + std::to_string(m_wafer) +
-	        ", hicann: " + m_hicann.dump() + ", setting digital weights: " +
-	        (m_digital_weight ? "true" : "false"));
+
 	auto start = std::chrono::system_clock::now();
-	init_logger();
 
-	euter::ObjectStore store;
-	auto marocco = pymarocco::PyMarocco::create();
-	marocco->continue_despite_synapse_loss = m_synapse_loss;
+	auto &store = m_int_data->store;
+	auto &marocco = m_int_data->marocco;
+	auto &runtime = m_int_data->runtime;
 
-	// Choose between Hardware, ESS, and None
-	marocco->backend = pymarocco::PyMarocco::Backend::Hardware;
+	auto &bs_populations = m_int_data->bs_populations;
+	auto &projections = m_int_data->projections;
+	auto &list_projections_exc = m_int_data->list_projections_exc;
+	auto &list_projections_inh = m_int_data->list_projections_inh;
+	auto &list_connections = m_int_data->list_connections;
+	if (!(m_keep_mapping && m_int_data->m_already_mapped)) {
+		cypress::global_logger().info(
+		    "cypress",
+		    "Running with configuration: neuron size: " +
+		        std::to_string(m_neuron_size) +
+		        ", big_capacitor: " + (m_use_big_capacitor ? "true" : "false") +
+		        ", bandwidth: " + std::to_string(m_bandwidth) +
+		        ", synapse loss: " + std::to_string(m_synapse_loss) +
+		        ", calib path: " + m_calib_path +
+		        ", wafer: " + std::to_string(m_wafer) +
+		        ", hicann: " + m_hicann.dump() + ", setting digital weights: " +
+		        (m_digital_weight ? "true" : "false"));
+		init_logger();
 
-	marocco->calib_backend = pymarocco::PyMarocco::CalibBackend::Binary;
-	marocco->neuron_placement.default_neuron_size(
-	    m_neuron_size);  // denmems per neuron
+		// store = euter::ObjectStore();
+		marocco = pymarocco::PyMarocco::create();
+		marocco->continue_despite_synapse_loss = m_synapse_loss;
 
-	// Some low-level defaults we might consider to change
-	marocco->neuron_placement.restrict_rightmost_neuron_blocks(true);  // false
-	marocco->neuron_placement.minimize_number_of_sending_repeaters(
-	    true);  // false
-	marocco->param_trafo.use_big_capacitors =
-	    m_use_big_capacitor;  // default true
-	marocco->input_placement.consider_firing_rate(true);
-	marocco->input_placement.bandwidth_utilization(m_bandwidth);
-	marocco->calib_path = m_calib_path;
-	// marocco->defects.backend = pymarocco::Defects::Backend::XML;
-	marocco->defects.path = m_calib_path;
-	marocco->default_wafer = HMF::Coordinate::Wafer(m_wafer);
+		// Choose between Hardware, ESS, and None
+		marocco->backend = pymarocco::PyMarocco::Backend::Hardware;
 
-	auto runtime =
-	    pymarocco::runtime::Runtime::create(HMF::Coordinate::Wafer(m_wafer));
-	// Save marocco to euter::ObjectStore
-	euter::ObjectStore::Settings settings;
-	euter::ObjectStore::metadata_map metadata;
-	metadata["marocco"] = marocco;
-	metadata["marocco_runtime"] = runtime;
-	store.setup(settings, metadata);  // runtime object
+		marocco->calib_backend = pymarocco::PyMarocco::CalibBackend::Binary;
+		marocco->neuron_placement.default_neuron_size(
+		    m_neuron_size);  // denmems per neuron
 
-	// Create populations
-	const std::vector<PopulationBase> &populations = source.populations();
-	std::vector<euter::PopulationPtr> bs_populations =
-	    create_pops(store, populations);
+		// Some low-level defaults we might consider to change
+		marocco->neuron_placement.restrict_rightmost_neuron_blocks(
+		    true);  // false
+		marocco->neuron_placement.minimize_number_of_sending_repeaters(
+		    true);  // false
+		marocco->param_trafo.use_big_capacitors =
+		    m_use_big_capacitor;  // default true
+		marocco->input_placement.consider_firing_rate(true);
+		marocco->input_placement.bandwidth_utilization(m_bandwidth);
+		marocco->calib_path = m_calib_path;
+		// marocco->defects.backend = pymarocco::Defects::Backend::XML;
+		marocco->defects.path = m_calib_path;
+		marocco->default_wafer = D::Wafer(m_wafer);
 
-	for (size_t i = 0; i < populations.size(); i++) {
-		set_population_parameters(bs_populations[i], populations[i]);
-		set_population_records(bs_populations[i], populations[i]);
-	}
+		m_int_data->runtime =
+		    pymarocco::runtime::Runtime::create(D::Wafer(m_wafer));
+		runtime = m_int_data->runtime;
+		// Save marocco to euter::ObjectStore
+		euter::ObjectStore::Settings settings;
+		euter::ObjectStore::metadata_map metadata;
+		metadata["marocco"] = marocco;
+		metadata["marocco_runtime"] = runtime;
+		store.setup(settings, metadata);  // runtime object
 
-	// Random generator used for random connectors
-	boost::shared_ptr<euter::RandomGenerator> rng =
-	    boost::make_shared<euter::NativeRandomGenerator>(1234);
+		// Create populations
+		const std::vector<PopulationBase> &populations = source.populations();
+		bs_populations = create_pops(store, populations);
 
-	std::vector<euter::ProjectionPtr> projections;
-	std::vector<euter::ProjectionPtr> list_projections_exc;
-	std::vector<euter::ProjectionPtr> list_projections_inh;
-	std::vector<std::vector<cypress::LocalConnection>> list_connections;
+		for (size_t i = 0; i < populations.size(); i++) {
+			set_population_parameters(bs_populations[i], populations[i]);
+			set_population_records(bs_populations[i], populations[i]);
+		}
 
-	for (size_t i = 0; i < source.connections().size(); i++) {
-		auto conn = source.connections()[i];
-		auto source = get_popview(bs_populations[conn.pid_src()],
-		                          conn.nid_src0(), conn.nid_src1());
-		auto target = get_popview(bs_populations[conn.pid_tar()],
-		                          conn.nid_tar0(), conn.nid_tar1());
-		std::string recep_type = conn.connector().synapse()->parameters()[0] > 0
-		                             ? "excitatory"
-		                             : "inhibitory";
-		// TODO dynamic synapses
-		auto connect = get_connector(conn);
-		if (connect) {
-			projections.emplace_back(euter::Projection::create(
-			    store, source, target, connect, rng, "",
-			    recep_type));  //+ Synapse_dynamics , label
+		// Random generator used for random connectors
+		boost::shared_ptr<euter::RandomGenerator> rng =
+		    boost::make_shared<euter::NativeRandomGenerator>(1234);
+
+		projections.clear();
+		list_projections_exc.clear();
+		list_projections_inh.clear();
+		list_connections.clear();
+
+		for (size_t i = 0; i < source.connections().size(); i++) {
+			auto conn = source.connections()[i];
+			auto source = get_popview(bs_populations[conn.pid_src()],
+			                          conn.nid_src0(), conn.nid_src1());
+			auto target = get_popview(bs_populations[conn.pid_tar()],
+			                          conn.nid_tar0(), conn.nid_tar1());
+			std::string recep_type =
+			    conn.connector().synapse()->parameters()[0] > 0 ? "excitatory"
+			                                                    : "inhibitory";
+			// TODO dynamic synapses
+			auto connect = get_connector(conn);
+			if (connect) {
+				projections.emplace_back(euter::Projection::create(
+				    store, source, target, connect, rng, "",
+				    recep_type));  //+ Synapse_dynamics , label
+			}
+			else {
+				projections.emplace_back(euter::ProjectionPtr());
+				list_connections.emplace_back();
+				auto tuple = get_list_connector(conn, list_connections.back(),
+				                                !m_digital_weight);
+				list_projections_exc.emplace_back(euter::Projection::create(
+				    store, source, target, std::get<0>(tuple), rng, "",
+				    "excitatory"));
+				list_projections_inh.emplace_back(euter::Projection::create(
+				    store, source, target, std::get<1>(tuple), rng, "",
+				    "inhibitory"));
+			}
+		}
+
+		// ProjectionMatrix weights = proj->getWeights(); Used to get the set
+		// weights
+
+		manual_placement(m_hicann, marocco, bs_populations);
+
+		// Run mapping, necessary for changing low-level parameters
+		marocco->backend = pymarocco::PyMarocco::Backend::None;
+		marocco->skip_mapping = false;
+		store.run(duration);  // ms
+		submit(store);
+		set_stahl_params(runtime->wafer(), 1023, 2);
+
+		if (m_ess) {
+			marocco->backend = pymarocco::PyMarocco::Backend::ESS;
 		}
 		else {
-			projections.emplace_back(euter::ProjectionPtr());
-			list_connections.emplace_back();
-			auto tuple = get_list_connector(conn, list_connections.back());
-			list_projections_exc.emplace_back(euter::Projection::create(
-			    store, source, target, std::get<0>(tuple), rng, "",
-			    "excitatory"));
-			list_projections_inh.emplace_back(euter::Projection::create(
-			    store, source, target, std::get<1>(tuple), rng, "",
-			    "inhibitory"));
+			marocco->backend = pymarocco::PyMarocco::Backend::Hardware;
 		}
-	}
-
-	// ProjectionMatrix weights = proj->getWeights(); Used to get the set
-	// weights
-
-	manual_placement(m_hicann, marocco, bs_populations);
-
-	// Run mapping, necessary for changing low-level parameters
-	marocco->backend = pymarocco::PyMarocco::Backend::None;
-	marocco->skip_mapping = false;
-	store.run(duration);  // ms
-	submit(store);
-	set_stahl_params(runtime->wafer(), 1023, 2);
-
-	if (m_ess) {
-		marocco->backend = pymarocco::PyMarocco::Backend::ESS;
+		marocco->skip_mapping = true;
 	}
 	else {
-		marocco->backend = pymarocco::PyMarocco::Backend::Hardware;
+		if ((bs_populations.size() != source.populations().size()) ||
+		    (projections.size() != source.connections().size())) {
+			throw cypress::ExecutionError(
+			    "Unexpected network dimenstion! If only changing "
+			    "weights make sure to use the same network!");
+		}
+		size_t counter = 0;
+		for (size_t i = 0; i < projections.size(); i++) {
+			auto conn = source.connections()[i];
+			if (!projections[i]) {
+				if (counter > list_connections.size()) {
+					throw cypress::ExecutionError(
+					    "Unexpected number of list connectors! If only changing"
+					    " weights make sure to use the same network!");
+				}
+				conn.connect(list_connections[counter]);
+				counter++;
+			}
+		}
+		for (size_t pop_id = 0; pop_id < source.populations().size();
+		     pop_id++) {
+			auto pop = source.populations()[pop_id];
+			if (&(pop.type()) == &cypress::SpikeSourceArray::inst()) {
+				auto bio_nrns = pop_to_bio_neurons(
+				    runtime->results()->placement, bs_populations[pop_id]);
+				for (size_t nid = 0; nid < pop.size(); nid++) {
+					runtime->results()->spike_times.set(
+					    bio_nrns[nid], pop[nid].parameters().parameters());
+				}
+			}
+		}
 	}
-	marocco->skip_mapping = true;
-
 	// Set low-level weights
 	if (m_digital_weight) {
 		size_t counter = 0;
@@ -863,9 +935,15 @@ void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
 	store.run(duration);
 	submit(store);
 	auto execrun = std::chrono::system_clock::now();
-	fetch_data(populations, bs_populations);
+	fetch_data(source.populations(), bs_populations);
 
 	store.reset();
+	if (m_keep_mapping) {
+		m_int_data->m_already_mapped = true;
+		marocco->verification = pymarocco::PyMarocco::Verification::Skip;
+		marocco->checkl1locking =
+		    pymarocco::PyMarocco::CheckL1Locking::SkipCheck;
+	}
 
 	auto finished = std::chrono::system_clock::now();
 	source.runtime({std::chrono::duration<Real>(finished - start).count(),

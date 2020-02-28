@@ -533,7 +533,7 @@ TEST(BrainScaleS, fetch_data)
 {
 	StaticSynapse synapse = StaticSynapse().weight(15).delay(1);
 	Json json(
-	    {{"digital_weight", true}, {"neuron_size", 16} /*, {"ess", true}*/});
+	    {{"digital_weight", true}, {"neuron_size", 8} /*, {"ess", true}*/});
 	// TODO awaiting bugfix
 	auto backend = BrainScaleS(json);
 
@@ -547,16 +547,17 @@ TEST(BrainScaleS, fetch_data)
 	            "target", 1,
 	            IfCondExpParameters()
 	                .cm(0.2)
-	                .v_reset(-70)
-	                .v_rest(-50)
-	                .v_thresh(-30)
-	                .e_rev_E(60)
-	                .tau_m(20)
-	                .tau_refrac(0.1)
-	                .tau_syn_E(5.0),
+	                .v_reset(-70.0)
+	                .v_rest(-70.0)
+	                .v_thresh(-45.0)
+	                .e_rev_E(30.0)
+	                .tau_m(10.0)
+	                .tau_refrac(1.0)
+	                .tau_syn_E(5.0)
+	                .e_rev_I(-70.0),
 	            IfCondExpSignals().record_spikes().record_v())
 	        .add_connection("source", "target", Connector::all_to_all(synapse))
-	        .run(backend, 800.0);
+	        .run(backend, 1600.0);
 
 	auto pop = net.population<IfCondExp>("target");
 
@@ -568,27 +569,27 @@ TEST(BrainScaleS, fetch_data)
 
 	size_t size = pop[0].signals().get_spikes().size();
 	EXPECT_TRUE(size > 0);
-	EXPECT_NEAR(pop[0].signals().get_spikes()[0], 251.0, 5);
-	EXPECT_NEAR(pop[0].signals().get_spikes()[size - 1], 507.0, 5);
+	EXPECT_NEAR(pop[0].signals().get_spikes()[0], 251.0, 10);
+	EXPECT_NEAR(pop[0].signals().get_spikes()[size - 1], 507.0, 10);
 
 	auto v_and_time = pop[0].signals().get_v();
 	size = v_and_time.rows();
 	EXPECT_NEAR(v_and_time(0, 0), 0.1, 0.1);
-	EXPECT_NEAR(v_and_time(15, 1), -50.0, 10.0);
+	EXPECT_NEAR(v_and_time(50, 1), -70.0, 10.0);
 
-	EXPECT_NEAR(v_and_time(size - 1, 0), 800.0, 0.1);
-	EXPECT_NEAR(v_and_time(size - 1, 1), -50.0, 10.0);
+	EXPECT_NEAR(v_and_time(size - 1, 0), 1600.0, 0.1);
+	EXPECT_NEAR(v_and_time(size - 1, 1), -70.0, 10.0);
 }
 
 TEST(BrainScaleS, low_level_from_list)
 {
 	cypress::global_logger().min_level(LogSeverity::WARNING);
 	Json json(
-	    {{"digital_weight", true}, {"neuron_size", 16} /*, {"ess", true}*/});
+	    {{"digital_weight", true}, {"neuron_size", 8} /*, {"ess", true}*/});
 	// TODO awaiting bugfix
 	auto backend = BrainScaleS(json);
 
-	size_t max_weight = 15;
+	size_t max_weight = 7;
 	auto net =
 	    Network()
 	        // Add a named population of poisson spike sources
@@ -596,7 +597,7 @@ TEST(BrainScaleS, low_level_from_list)
 	            "source", 1,
 	            SpikeSourceConstFreqParameters()
 	                .start(5.0)
-	                .rate(100.0)
+	                .rate(50.0)
 	                .duration(5000.0),
 	            SpikeSourceConstFreqSignals())
 	        .add_population<IfCondExp>("target", max_weight,
@@ -605,10 +606,10 @@ TEST(BrainScaleS, low_level_from_list)
 	                                       .v_reset(-70)
 	                                       .v_rest(-60)
 	                                       .v_thresh(-45)
-	                                       .e_rev_E(60)
-	                                       .tau_m(20)
+	                                       .e_rev_E(30)
+	                                       .tau_m(8)
 	                                       .tau_refrac(1.0)
-	                                       .tau_syn_E(10.0),
+	                                       .tau_syn_E(15.0),
 	                                   IfCondExpSignals().record_spikes());
 	/*.add_population<IfCondExp>("target2", 1,
 	                           IfCondExpParameters()
@@ -624,7 +625,7 @@ TEST(BrainScaleS, low_level_from_list)
 
 	std::vector<LocalConnection> conns;
 	for (size_t i = 0; i < max_weight; i++) {
-		conns.emplace_back(LocalConnection(0, i, i, 1.0));
+		conns.emplace_back(LocalConnection(0, i, 2*i, 1.0));
 	}
 	net.add_connection("source", "target", Connector::from_list(conns));
 	net.run(backend, 5010);

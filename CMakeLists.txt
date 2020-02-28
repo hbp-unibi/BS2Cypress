@@ -87,22 +87,25 @@ add_library(BS2CYPRESS SHARED
     backend/brainscales
 )
 add_dependencies(BS2CYPRESS cypress_ext)
-target_link_libraries(BS2CYPRESS 
-    PRIVATE ester-submit
-    PRIVATE euter
-    PRIVATE marocco
-    PRIVATE marocco_runtime
-    PRIVATE marocco_parameters
-    PRIVATE marocco_coordinates
-    PRIVATE marocco_results
-    PRIVATE pymarocco_cpp
-    PRIVATE halco_common
-    PRIVATE halco_hicann_v2
-    PRIVATE sthal
-    PRIVATE halbe_container
-    PRIVATE log4cxx.so.10
-    PRIVATE ${Boost_LIBRARIES}
-    PRIVATE ${PYTHON_LIBRARIES}
+target_link_libraries(BS2CYPRESS PUBLIC
+     euter
+     ester-submit 
+     marocco
+     halco_hicann_v2
+     euter
+     marocco_runtime
+     marocco_parameters
+     marocco_coordinates
+     marocco_results
+     pymarocco_cpp
+     halco_hicann_v2
+     halco_common
+     sthal
+     halbe_container
+     log4cxx.so.10
+     halco_hicann_v2
+     #${Boost_LIBRARIES}
+     ${PYTHON_LIBRARIES}
 )
 
 
