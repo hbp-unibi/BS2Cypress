@@ -31,15 +31,16 @@ target_link_libraries(test_brainscales PUBLIC
     BS2CYPRESS
 	${CMAKE_BINARY_DIR}/cypress_ext-prefix/src/cypress_ext-build/libcypress.a
     PRIVATE ester-submit
-     PRIVATE euter
+    PRIVATE euter
     PRIVATE marocco
     PRIVATE marocco_runtime
     PRIVATE marocco_parameters
     PRIVATE marocco_coordinates
     PRIVATE marocco_results
     PRIVATE pymarocco_cpp
+    PRIVATE halco_hicann_v2
     PRIVATE halco_common
-     PRIVATE halco_hicann_v2
+    PRIVATE halco_hicann_v2
     PRIVATE sthal
     PRIVATE halbe_container
     PRIVATE log4cxx.so.10

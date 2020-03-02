@@ -48,7 +48,7 @@ find_package(PythonLibs 2.7 REQUIRED )
 include(cypress_external)
 include_directories(${CMAKE_SOURCE_DIR}/backend)
 
-# BrainScaleS related stuff
+# Boost
 #find_package(Boost REQUIRED serialization system filesystem mpi python27)
 
 # Setup all includes, we use current github version for includes, which might break at some point -> BS do not deploy headers yet
@@ -78,7 +78,7 @@ include_directories(
         ${BS_INCLUDE_PATH}/ester
 )
 # Set in BS Software, if not set, link will not work
-add_compile_options(-D BOOST_VARIANT_DO_NOT_USE_VARIADIC_TEMPLATES)
+add_compile_options(-DBOOST_VARIANT_DO_NOT_USE_VARIADIC_TEMPLATES -DBOOST_MPL_LIMIT_LIST_SIZE=30 -DBOOST_MPL_CFG_NO_PREPROCESSED_HEADERS -DBOOST_DYNAMIC_BITSET_DONT_USE_FRIENDS)
 
 # Manually set library path, because it is not included in LIBRARY_PATH environment variable
 link_directories("/wang/environment/software/container/meta-nmpm-software/current/lib")
@@ -92,18 +92,16 @@ target_link_libraries(BS2CYPRESS PUBLIC
      ester-submit 
      marocco
      halco_hicann_v2
+     halco_common
      euter
      marocco_runtime
      marocco_parameters
      marocco_coordinates
      marocco_results
      pymarocco_cpp
-     halco_hicann_v2
-     halco_common
      sthal
      halbe_container
      log4cxx.so.10
-     halco_hicann_v2
      #${Boost_LIBRARIES}
      ${PYTHON_LIBRARIES}
 )
