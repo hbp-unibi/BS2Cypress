@@ -20,11 +20,10 @@
 #include <cypress/cypress.hpp>
 #pragma GCC diagnostic pop
 
-#include "backend/brainscales.hpp"
-
-#include "gtest/gtest.h"
-
 #include <sstream>
+
+#include "backend/brainscales.hpp"
+#include "gtest/gtest.h"
 
 namespace cypress {
 using namespace euter;
@@ -532,16 +531,18 @@ TEST(BrainScaleS, get_popview)
 TEST(BrainScaleS, fetch_data)
 {
 	StaticSynapse synapse = StaticSynapse().weight(15).delay(1);
-	Json json(
-	    {{"digital_weight", true}, {"neuron_size", 8} /*, {"ess", true}*/});
-	// TODO awaiting bugfix
+	Json json({{"digital_weight", true},
+	           {"neuron_size", 4},
+	           {"ess", true},
+	           {"big_cap", false}});
 	auto backend = BrainScaleS(json);
 
 	auto net =
 	    Network()
 	        // Add a named population of poisson spike sources
 	        .add_population<SpikeSourceArray>(
-	            "source", 1, SpikeSourceArrayParameters({250, 500}),
+	            "source", 1,
+	            SpikeSourceArrayParameters({10, 11, 12, 13, 70, 71, 72, 73}),
 	            SpikeSourceArraySignals().record_spikes())
 	        .add_population<IfCondExp>(
 	            "target", 1,
@@ -549,15 +550,15 @@ TEST(BrainScaleS, fetch_data)
 	                .cm(0.2)
 	                .v_reset(-70.0)
 	                .v_rest(-70.0)
-	                .v_thresh(-45.0)
+	                .v_thresh(-68.0)
 	                .e_rev_E(30.0)
 	                .tau_m(10.0)
 	                .tau_refrac(1.0)
 	                .tau_syn_E(5.0)
-	                .e_rev_I(-70.0),
+	                .e_rev_I(-80.0),
 	            IfCondExpSignals().record_spikes().record_v())
 	        .add_connection("source", "target", Connector::all_to_all(synapse))
-	        .run(backend, 1600.0);
+	        .run(backend, 100.0);
 
 	auto pop = net.population<IfCondExp>("target");
 
@@ -569,24 +570,25 @@ TEST(BrainScaleS, fetch_data)
 
 	size_t size = pop[0].signals().get_spikes().size();
 	EXPECT_TRUE(size > 0);
-	EXPECT_NEAR(pop[0].signals().get_spikes()[0], 251.0, 10);
-	EXPECT_NEAR(pop[0].signals().get_spikes()[size - 1], 507.0, 10);
+	EXPECT_NEAR(pop[0].signals().get_spikes()[0], 15, 10);
+	EXPECT_NEAR(pop[0].signals().get_spikes()[size - 1], 75, 10);
 
 	auto v_and_time = pop[0].signals().get_v();
 	size = v_and_time.rows();
 	EXPECT_NEAR(v_and_time(0, 0), 0.1, 0.1);
-	EXPECT_NEAR(v_and_time(50, 1), -70.0, 10.0);
+	EXPECT_NEAR(v_and_time(1, 1), -70.0, 10.0);
 
-	EXPECT_NEAR(v_and_time(size - 1, 0), 1600.0, 0.1);
+	EXPECT_NEAR(v_and_time(size - 1, 0), 100.0, 0.1);
 	EXPECT_NEAR(v_and_time(size - 1, 1), -70.0, 10.0);
 }
 
 TEST(BrainScaleS, low_level_from_list)
 {
 	cypress::global_logger().min_level(LogSeverity::WARNING);
-	Json json(
-	    {{"digital_weight", true}, {"neuron_size", 8} /*, {"ess", true}*/});
-	// TODO awaiting bugfix
+	Json json({{"digital_weight", true},
+	           {"neuron_size", 2},
+	           {"ess", true},
+	           {"big_cap", false}});
 	auto backend = BrainScaleS(json);
 
 	size_t max_weight = 7;
@@ -597,46 +599,58 @@ TEST(BrainScaleS, low_level_from_list)
 	            "source", 1,
 	            SpikeSourceConstFreqParameters()
 	                .start(5.0)
-	                .rate(50.0)
-	                .duration(5000.0),
+	                .rate(200.0)
+	                .duration(500.0),
 	            SpikeSourceConstFreqSignals())
 	        .add_population<IfCondExp>("target", max_weight,
 	                                   IfCondExpParameters()
 	                                       .cm(0.2)
-	                                       .v_reset(-70)
-	                                       .v_rest(-60)
-	                                       .v_thresh(-45)
-	                                       .e_rev_E(30)
-	                                       .tau_m(8)
-	                                       .tau_refrac(1.0)
-	                                       .tau_syn_E(15.0),
+	                                       .v_reset(-70.0)
+	                                       .v_rest(-70.0)
+	                                       .v_thresh(-66.5)
+	                                       .e_rev_E(30.0)
+	                                       .tau_m(20.0)
+	                                       .tau_refrac(10.0)
+	                                       .tau_syn_E(5.0)
+	                                       .tau_syn_I(15.0)
+	                                       .e_rev_I(-100.0),
+	                                   IfCondExpSignals().record_spikes())
+	        .add_population<IfCondExp>("target2", 1,
+	                                   IfCondExpParameters()
+	                                       .cm(0.2)
+	                                       .v_reset(-70.0)
+	                                       .v_rest(-70.0)
+	                                       .v_thresh(-66.5)
+	                                       .e_rev_E(30.0)
+	                                       .tau_m(20.0)
+	                                       .tau_refrac(10.0)
+	                                       .tau_syn_E(5.0)
+	                                       .tau_syn_I(15.0)
+	                                       .e_rev_I(-100.0),
 	                                   IfCondExpSignals().record_spikes());
-	/*.add_population<IfCondExp>("target2", 1,
-	                           IfCondExpParameters()
-	                               .cm(0.2)
-	                               .v_reset(-70)
-	                               .v_rest(-20)
-	                               .v_thresh(-15)
-	                               .e_rev_E(60)
-	                               .tau_m(20)
-	                               .tau_refrac(0.1)
-	                               .tau_syn_E(3.0),
-	                           IfCondExpSignals().record_spikes());*/
 
 	std::vector<LocalConnection> conns;
 	for (size_t i = 0; i < max_weight; i++) {
-		conns.emplace_back(LocalConnection(0, i, 2*i, 1.0));
+		conns.emplace_back(LocalConnection(0, i, 2 * i, 3 * i));
 	}
 	net.add_connection("source", "target", Connector::from_list(conns));
-	net.run(backend, 5010);
+	net.add_connection("source", "target2",
+	                   Connector::from_list({{0, 0, 15, 2}}));
+	net.add_connection("source", "target2",
+	                   Connector::from_list({{0, 0, -15, 1}}));
+	net.run(backend, 510);
 
 	auto pop = net.population("target");
 	for (size_t i = 1; i < max_weight; i++) {
 		std::cout << pop[i].signals().data(0).size() << " bigger ? "
 		          << pop[i - 1].signals().data(0).size() << std::endl;
-		EXPECT_TRUE(pop[i].signals().data(0).size() >
+		EXPECT_TRUE(pop[i].signals().data(0).size() >=
 		            pop[i - 1].signals().data(0).size());
 	}
+	auto pop2 = net.population("target2");
+	std::cout << pop[max_weight - 1].signals().data(0).size() << " bigger ? "
+	          << pop2[0].signals().data(0).size() << std::endl;
+	EXPECT_TRUE(pop[max_weight - 1].signals().data(0).size() >=
+	            pop[0].signals().data(0).size());
 }
-
 }  // namespace cypress

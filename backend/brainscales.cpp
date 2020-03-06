@@ -433,7 +433,7 @@ cypress::BrainScaleS::get_list_connector(
 	for (size_t i = 0; i < conns_full.size(); i++) {
 		if (conns_full[i].inhibitory()) {
 			weights_inh[counter_inh] =
-			    set_values ? -conns_full[i].SynapseParameters[0] : 0.1;
+			    set_values ? -conns_full[i].SynapseParameters[0] : 0.005;
 			delays_inh[counter_inh] = conns_full[i].SynapseParameters[1];
 			conns_temp_inh[counter_inh] = {size_t(conns_full[i].src),
 			                               size_t(conns_full[i].tar)};
@@ -441,7 +441,7 @@ cypress::BrainScaleS::get_list_connector(
 		}
 		else {
 			weights[counter_exh] =
-			    set_values ? conns_full[i].SynapseParameters[0] : 0.1;
+			    set_values ? conns_full[i].SynapseParameters[0] : 0.005;
 			delays[counter_exh] = conns_full[i].SynapseParameters[1];
 			conns_temp[counter_exh] = {size_t(conns_full[i].src),
 			                           size_t(conns_full[i].tar)};
@@ -739,7 +739,6 @@ void set_low_level_weights_list(
 void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
                                   Real duration) const
 {
-
 	auto start = std::chrono::system_clock::now();
 
 	auto &store = m_int_data->store;
@@ -770,17 +769,25 @@ void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
 		marocco->continue_despite_synapse_loss = m_synapse_loss;
 
 		// Choose between Hardware, ESS, and None
-		marocco->backend = pymarocco::PyMarocco::Backend::Hardware;
-
+		if (m_ess) {
+			marocco->backend = pymarocco::PyMarocco::Backend::ESS;
+			marocco->hicann_configurator =
+			    boost::shared_ptr<sthal::HICANNConfigurator>(
+			        new sthal::HICANNConfigurator());
+			marocco->ess_config.pulse_statistics_file = "pulse_stats.py";
+		}
+		else {
+			marocco->backend = pymarocco::PyMarocco::Backend::Hardware;
+		}
 		marocco->calib_backend = pymarocco::PyMarocco::CalibBackend::Binary;
 		marocco->neuron_placement.default_neuron_size(
 		    m_neuron_size);  // denmems per neuron
 
 		// Some low-level defaults we might consider to change
-		marocco->neuron_placement.restrict_rightmost_neuron_blocks(
+		/*marocco->neuron_placement.restrict_rightmost_neuron_blocks(
 		    true);  // false
 		marocco->neuron_placement.minimize_number_of_sending_repeaters(
-		    true);  // false
+		    true);  // false*/
 		marocco->param_trafo.use_big_capacitors =
 		    m_use_big_capacitor;  // default true
 		marocco->input_placement.consider_firing_rate(true);
@@ -858,15 +865,15 @@ void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
 		marocco->skip_mapping = false;
 		store.run(duration);  // ms
 		submit(store);
-		set_stahl_params(runtime->wafer(), 1023, 2);
+		marocco->skip_mapping = true;
 
 		if (m_ess) {
 			marocco->backend = pymarocco::PyMarocco::Backend::ESS;
 		}
 		else {
 			marocco->backend = pymarocco::PyMarocco::Backend::Hardware;
+			set_stahl_params(runtime->wafer(), 1023, 2);
 		}
-		marocco->skip_mapping = true;
 	}
 	else {
 		if ((bs_populations.size() != source.populations().size()) ||
