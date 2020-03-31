@@ -83,6 +83,7 @@ public:
 	 *    "ess" : true // for simulation of the wafer
 	 *    "keep_mapping": false // True for in the loop simulations, where
 	 * only low-level weights are changed and you want to keep the mapping
+     *    "full_list_connect" : for mixed list connectors create a null synapse for inhibitory synapses in the list of excit. connections and vice versa. Allows to change sign in iterative runs. Relevant only in combination with digital_weight and keep_mapping = True
 	 * }
 	 */
 	BrainScaleS(const Json &setup = Json());
@@ -115,6 +116,7 @@ private:
 	bool m_digital_weight = false;
 	bool m_ess = false;
 	bool m_keep_mapping = false;
+    bool m_full_list_connect = false;
 
 public:
 	// Static functions for setting up the network
@@ -354,6 +356,7 @@ public:
 	 * connection details will be inserted
 	 * @param set_values true for directly setting values, false if values are
 	 * set low level and default value should be used
+     * @param full_list True: for mixed list connectors create a null synapse for inhibitory synapses in the list of excit. connections and vice versa.
 	 *
 	 * @return tuple of pointers to BS connectors, <0> for excitatory and <1>
 	 * for inhibitory connections
@@ -362,7 +365,7 @@ public:
 	                  boost::shared_ptr<euter::Connector>>
 	get_list_connector(const cypress::ConnectionDescriptor &conn,
 	                   std::vector<cypress::LocalConnection> &conns_full,
-	                   bool set_values = true);
+	                   bool set_values = true, bool full_list = false);
 
 	/**
 	 * Create a BS population view

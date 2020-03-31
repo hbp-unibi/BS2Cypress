@@ -193,6 +193,9 @@ cypress::BrainScaleS::BrainScaleS(const Json &setup)
 	if (setup.count("keep_mapping") > 0) {
 		m_keep_mapping = setup["keep_mapping"].get<bool>();
 	}
+	if (setup.count("full_list_connect") > 0) {
+		m_full_list_connect = setup["full_list_connect"].get<bool>();
+	}
 	if (m_keep_mapping && !m_digital_weight) {
 		throw cypress::ExecutionError(
 		    "Keeping the mapping and not using digital weights is not "
@@ -405,12 +408,13 @@ std::tuple<boost::shared_ptr<euter::Connector>,
            boost::shared_ptr<euter::Connector>>
 cypress::BrainScaleS::get_list_connector(
     const cypress::ConnectionDescriptor &conn,
-    std::vector<cypress::LocalConnection> &conns_full, bool set_values)
+    std::vector<cypress::LocalConnection> &conns_full, bool set_values, bool full_conn)
 {
 	// List connector
 	conn.connect(conns_full);
 	size_t n_exhs = 0;
 	size_t n_inhs = 0;
+    if(!full_conn){
 	for (size_t i = 0; i < conns_full.size(); i++) {
 		if (conns_full[i].inhibitory()) {
 			n_inhs++;
@@ -420,6 +424,11 @@ cypress::BrainScaleS::get_list_connector(
 		}
 		// default = 0 --> excitatory!
 	}
+    }
+    else{
+        n_exhs = conns_full.size();
+        n_inhs = conns_full.size();
+    }
 	euter::ConnectorTypes::vector_type weights(n_exhs);
 	euter::ConnectorTypes::vector_type delays(n_exhs);
 	auto conns_temp = euter::FromListConnector::Connections(n_exhs);
@@ -438,6 +447,14 @@ cypress::BrainScaleS::get_list_connector(
 			conns_temp_inh[counter_inh] = {size_t(conns_full[i].src),
 			                               size_t(conns_full[i].tar)};
 			counter_inh++;
+            if(full_conn){
+                weights[counter_exh] =
+                    set_values ? 0.0 : 0.005;
+                delays[counter_exh] = conns_full[i].SynapseParameters[1];
+                conns_temp[counter_exh] = {size_t(conns_full[i].src),
+			                           size_t(conns_full[i].tar)};
+                counter_exh++;
+            }
 		}
 		else {
 			weights[counter_exh] =
@@ -446,6 +463,14 @@ cypress::BrainScaleS::get_list_connector(
 			conns_temp[counter_exh] = {size_t(conns_full[i].src),
 			                           size_t(conns_full[i].tar)};
 			counter_exh++;
+            if(full_conn){
+                weights_inh[counter_inh] =
+                    set_values ? 0.0 : 0.005;
+                delays_inh[counter_inh] = conns_full[i].SynapseParameters[1];
+                conns_temp_inh[counter_inh] = {size_t(conns_full[i].src),
+			                               size_t(conns_full[i].tar)};
+                counter_inh++;
+            }
 		}
 	};
 
@@ -693,13 +718,34 @@ void set_low_level_weights_list(
     euter::PopulationPtr &source, euter::PopulationPtr &target,
     euter::ProjectionPtr &conn_exc, euter::ProjectionPtr &conn_inh,
     std::vector<cypress::LocalConnection> &vec,
-    boost::shared_ptr<pymarocco::runtime::Runtime> runtime)
+    boost::shared_ptr<pymarocco::runtime::Runtime> runtime, bool reset)
 {
 	auto &results = runtime->results()->placement;
 	auto bio_nrns_a = pop_to_bio_neurons(results, source);
 	auto bio_nrns_b = pop_to_bio_neurons(results, target);
 	auto &results_synapses = runtime->results()->synapse_routing.synapses();
 	size_t counter = 0;
+    if(reset){
+        for(size_t i = 0; i<bio_nrns_a.size(); i++){
+            for(size_t j = 0; j<bio_nrns_b.size(); j++){
+                auto syn_hand = get_synapse(conn_inh->id(), bio_nrns_a[i],
+		                            bio_nrns_b[j], results_synapses);
+                if (syn_hand.size() != 0) {
+                    auto hicann = syn_hand[0].get()->toHICANNOnWafer();
+                    auto proxy = (*runtime->wafer())[hicann].synapses[*(syn_hand[0].get())];
+                    proxy.weight = HMF::HICANN::SynapseWeight(0);
+                }
+                
+                syn_hand = get_synapse(conn_exc->id(), bio_nrns_a[i],
+		                            bio_nrns_b[j], results_synapses);
+                if (syn_hand.size() != 0) {
+                    auto hicann = syn_hand[0].get()->toHICANNOnWafer();
+                    auto proxy = (*runtime->wafer())[hicann].synapses[*(syn_hand[0].get())];
+                    proxy.weight = HMF::HICANN::SynapseWeight(0);
+                }
+            }
+        }
+    }
 
 	for (cypress::LocalConnection &i : vec) {
 		size_t conn_id;
@@ -764,7 +810,8 @@ void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
 		        (m_digital_weight ? "true" : "false"));
 		init_logger();
 
-		// store = euter::ObjectStore();
+		m_int_data->store = euter::ObjectStore();
+        store = m_int_data->store;
 		marocco = pymarocco::PyMarocco::create();
 		marocco->continue_despite_synapse_loss = m_synapse_loss;
 
@@ -845,7 +892,7 @@ void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
 				projections.emplace_back(euter::ProjectionPtr());
 				list_connections.emplace_back();
 				auto tuple = get_list_connector(conn, list_connections.back(),
-				                                !m_digital_weight);
+				                                !m_digital_weight, m_full_list_connect);
 				list_projections_exc.emplace_back(euter::Projection::create(
 				    store, source, target, std::get<0>(tuple), rng, "",
 				    "excitatory"));
@@ -918,7 +965,8 @@ void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
 				                           bs_populations[conn.pid_tar()],
 				                           list_projections_exc[counter],
 				                           list_projections_inh[counter],
-				                           list_connections[counter], runtime);
+				                           list_connections[counter], runtime,
+                                           m_full_list_connect);
 				counter++;
 			}
 			else {
