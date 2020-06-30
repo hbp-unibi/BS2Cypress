@@ -30,7 +30,6 @@ add_dependencies(test_brainscales cypress_ext BS2CYPRESS)
 target_link_libraries(test_brainscales PUBLIC
     BS2CYPRESS
 	${CMAKE_BINARY_DIR}/cypress_ext-prefix/src/cypress_ext-build/libcypress.a
-    PRIVATE ester-submit
     PRIVATE euter
     PRIVATE marocco
     PRIVATE marocco_runtime

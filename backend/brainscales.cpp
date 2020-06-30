@@ -69,7 +69,9 @@
 #include "sthal/Wafer.h"
 
 // submit experiments to the wafer
-#include "submit.h"
+// #include "submit.h" This is deprecated
+#include "marocco/mapping.h"
+
 
 using boost::make_shared;
 namespace C = halco::common;
@@ -911,7 +913,7 @@ void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
 		marocco->backend = pymarocco::PyMarocco::Backend::None;
 		marocco->skip_mapping = false;
 		store.run(duration);  // ms
-		submit(store);
+		marocco::mapping::run(store);
 		marocco->skip_mapping = true;
 
 		if (m_ess) {
@@ -988,7 +990,7 @@ void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
 	// Run the emulation
 	auto buildconn = std::chrono::system_clock::now();
 	store.run(duration);
-	submit(store);
+	marocco::mapping::run(store);
 	auto execrun = std::chrono::system_clock::now();
 	fetch_data(source.populations(), bs_populations);
 

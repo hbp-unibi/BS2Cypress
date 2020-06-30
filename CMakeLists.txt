@@ -75,7 +75,6 @@ include_directories(
         ${BS_INCLUDE_PATH}/calibtic/include
         ${BS_INCLUDE_PATH}/hicann-system/units/communication/source
         ${BS_INCLUDE_PATH}/hwdb
-        ${BS_INCLUDE_PATH}/ester
 )
 # Set in BS Software, if not set, link will not work
 add_compile_options(-DBOOST_VARIANT_DO_NOT_USE_VARIADIC_TEMPLATES -DBOOST_MPL_LIMIT_LIST_SIZE=30 -DBOOST_MPL_CFG_NO_PREPROCESSED_HEADERS -DBOOST_DYNAMIC_BITSET_DONT_USE_FRIENDS)
@@ -89,7 +88,6 @@ add_library(BS2CYPRESS SHARED
 add_dependencies(BS2CYPRESS cypress_ext)
 target_link_libraries(BS2CYPRESS PUBLIC
      euter
-     ester-submit 
      marocco
      halco_hicann_v2
      halco_common
@@ -105,7 +103,6 @@ target_link_libraries(BS2CYPRESS PUBLIC
      #${Boost_LIBRARIES}
      ${PYTHON_LIBRARIES}
 )
-
 
 enable_testing()
 add_subdirectory(test)
