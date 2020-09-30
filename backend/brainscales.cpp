@@ -1006,7 +1006,8 @@ void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
 	source.runtime({std::chrono::duration<Real>(finished - start).count(),
 	                std::chrono::duration<Real>(execrun - buildconn).count(),
 	                std::chrono::duration<Real>(buildconn - start).count(),
-	                std::chrono::duration<Real>(finished - execrun).count()});
+	                std::chrono::duration<Real>(finished - execrun).count(),
+                    duration * 1.0e-7});
 }
 
 std::unordered_set<const cypress::NeuronType *>
