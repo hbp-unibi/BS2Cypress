@@ -180,6 +180,9 @@ cypress::BrainScaleS::BrainScaleS(const Json &setup)
 	if (setup.count("calib_path") > 0) {
 		m_calib_path = setup["calib_path"].get<std::string>();
 	}
+	if (setup.count("defects_path") > 0) {
+		m_defects_path = setup["defects_path"].get<std::string>();
+	}
 	if (setup.count("wafer") > 0) {
 		m_wafer = setup["wafer"].get<int>();
 	}
@@ -677,6 +680,17 @@ void cypress::BrainScaleS::fetch_data(
 	}
 }
 namespace {
+std::vector<std::string> split(const std::string &s, char delim)
+{
+	std::vector<std::string> elems;
+	std::stringstream ss(s);
+	std::string item;
+	while (std::getline(ss, item, delim)) {
+		elems.push_back(item);
+	}
+	return elems;
+}
+
 inline auto pop_to_bio_neurons(marocco::placement::results::Placement &results,
                                euter::PopulationPtr &source)
 {
@@ -828,7 +842,6 @@ void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
 		else {
 			marocco->backend = pymarocco::PyMarocco::Backend::Hardware;
 		}
-		marocco->calib_backend = pymarocco::PyMarocco::CalibBackend::Binary;
 		marocco->neuron_placement.default_neuron_size(
 		    m_neuron_size);  // denmems per neuron
 
@@ -839,11 +852,33 @@ void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
 		    true);  // false*/
 		marocco->param_trafo.use_big_capacitors =
 		    m_use_big_capacitor;  // default true
-		marocco->input_placement.consider_firing_rate(true);
-		marocco->input_placement.bandwidth_utilization(m_bandwidth);
-		marocco->calib_path = m_calib_path;
-		// marocco->defects.backend = pymarocco::Defects::Backend::XML;
-		marocco->defects.path = m_calib_path;
+		if(m_bandwidth < 1.0){
+			marocco->input_placement.consider_firing_rate(true);
+			marocco->input_placement.bandwidth_utilization(m_bandwidth);
+		}
+		if(split(m_calib_path, '/').size() > 4 &&
+			split(m_calib_path, '/')[3] == "commissioning") {
+			marocco->defects.backend = pymarocco::Defects::Backend::XML;
+			marocco->calib_backend = pymarocco::PyMarocco::CalibBackend::XML;
+			marocco->calib_path = m_calib_path;
+			std::string defects_path = m_calib_path;
+			if(m_defects_path == ""){
+				throw std::runtime_error("Using commissioning calibration "
+				"requires custom defects path!");
+			}
+			marocco->defects.path = m_defects_path;
+        }
+        else{
+			marocco->calib_backend = pymarocco::PyMarocco::CalibBackend::Binary;
+			//marocco->defects.backend = pymarocco::Defects::Backend::Binary;
+			marocco->calib_path = m_calib_path;
+			if(m_defects_path == "") {
+				marocco->defects.path = m_calib_path;
+			}
+			else {
+				marocco->defects.path = m_defects_path;
+			}
+        }
 		marocco->default_wafer = D::Wafer(m_wafer);
 
 		m_int_data->runtime =

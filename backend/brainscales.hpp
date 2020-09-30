@@ -77,6 +77,7 @@ public:
 	 *    "synapse_loss": false, // allow loss of synapses for mapping
 	 *    "calib_path": "/wang/data/calibration/brainscales/default", // path
 	 *                                   to calibration and defects
+     *     "defects_path : "", // path to defects, Defaults to calib_path
 	 *    "wafer": 33, // which wafer to run on
 	 *    "hicann": [297], // hicanns used for the experiment
 	 *    "digital_weight" : true //directly set low-level digital weights
@@ -111,6 +112,12 @@ private:
 	double m_bandwidth = 0.8;
 	bool m_synapse_loss = false;
 	std::string m_calib_path = "/wang/data/calibration/brainscales/default";
+    std::string m_defects_path = "";
+    /* New commisioning Paths: 
+     * "/wang/data/commissioning/BSS-1/rackplace/33/calibration/current
+     * /wang/data/commissioning/BSS-1/rackplace/33/derived_plus_calib_blacklisting/current
+     */
+    
 	size_t m_wafer = 33;
 	Json m_hicann = 297;
 	bool m_digital_weight = false;
