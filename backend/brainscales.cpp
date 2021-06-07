@@ -856,6 +856,10 @@ void cypress::BrainScaleS::do_run(cypress::NetworkBase &source,
 			marocco->input_placement.consider_firing_rate(true);
 			marocco->input_placement.bandwidth_utilization(m_bandwidth);
 		}
+		else{
+			marocco->input_placement.consider_firing_rate(false);
+			marocco->input_placement.bandwidth_utilization(m_bandwidth);
+        }
 		if(split(m_calib_path, '/').size() > 4 &&
 			split(m_calib_path, '/')[3] == "commissioning") {
 			marocco->defects.backend = pymarocco::Defects::Backend::XML;
